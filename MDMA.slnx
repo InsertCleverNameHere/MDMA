@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Mdma.Cli/Mdma.Cli.csproj" />
+    <Project Path="src/Mdma.Core/Mdma.Core.csproj" />
+    <Project Path="src/Mdma.Gui/Mdma.Gui.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Mdma.Core.Tests/Mdma.Core.Tests.csproj" />
+  </Folder>
+</Solution>

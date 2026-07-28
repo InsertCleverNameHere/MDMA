@@ -1,0 +1,47 @@
+## Build results
+bin/
+obj/
+[Bb]uild/
+[Rr]elease/
+[Dd]ebug/
+publish/
+
+## .NET / MSBuild
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.dbmdl
+*.jfm
+
+## Rider / VS / VS Code
+.idea/
+.vs/
+*.swp
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+
+## Test results
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+## NuGet
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+*.nuget.props
+*.nuget.targets
+
+## MDMA-specific runtime artifacts data
+MDMA_Work/
+*.mdma
+*.mdma.partial
+
+## OS cruft
+.DS_Store
+Thumbs.db
