@@ -10,10 +10,14 @@ JDownloader 2 uses a **Single Sparse File** model for binary download data and a
 
 ## 2. On-Disk Binary Storage Strategy
 
-### 2.1 File Naming & Path Architecture
+### 2.1 File Naming & Path Conventions
 
-- **Incomplete Part File:** `<DownloadDirectory>/<Filename>.part`
-- **Completed File:** `<DownloadDirectory>/<Filename>`
+JDownloader 2 resolves target paths using a two-tier directory lookup:
+
+1. **Global Default Directory:** Stored in `<JD2_Root>/cfg/org.jdownloader.settings.GeneralSettings.json` under key `"defaultdownloadfolder"`.
+2. **Package-Level Directory:** Stored inside `cfg/downloadList<N>.zip` in each parent `FilePackageStorable` entry under key `"downloadFolder"`.
+3. **Part File Path:** `<downloadFolder>/<Filename>.part`
+4. **Final File Path:** `<downloadFolder>/<Filename>`
 
 ### 2.2 Sparse File Writing
 

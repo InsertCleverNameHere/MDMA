@@ -67,35 +67,54 @@ Needed early because every phase below should ship with tests, and several piece
 
 ---
 
-## Phase 2 — Discovery & Scanning
+## Phase 2 — Discovery & Scanning — STATUS: COMPLETE
 
-### 2.1 `NdmLocator` (implements `IDownloadManagerLocator`, `App = NDM`)
+**Model change made during this phase:** `TargetAppLocation` (in `Discovery.cs`) gained a `MetadataDir` field and both `InstallOrConfigDir` and `DownloadDirectory` became nullable, because NDM and JD2 both turned out to have split/partial location knowledge depending on auto-detect vs. manual-path validation:
 
-- [ ] `TryAutoDetect`: read `HKCU\SOFTWARE\NeatDM` via `IRegistryAccessor` for `TempDirectory`, `DownloadDirectory`; typed `TargetAppNotFound` if key/values missing.
-- [ ] `ValidateManualPath`: confirm `neatdb.db` exists and opens via a trial SQLite connection; confirm expected `downloads` table schema present.
+```csharp
+public sealed record TargetAppLocation(
+    TargetApp App,
+    string? InstallOrConfigDir,  // NDM: TempDirectory. JD2: cfg\ folder. Null if unknown.
+    string? MetadataDir,         // NDM only: folder containing neatdb.db. Null for JD2.
+    string? DownloadDirectory,   // App-level DEFAULT only. NOT authoritative for JD2 (see below).
+    bool WasAutoDetected);
+```
 
-### 2.2 `Jd2Locator` (implements `IDownloadManagerLocator`, `App = JD2`)
+### 2.1 `NdmLocator` — DONE
 
-- [ ] `TryAutoDetect`: probe `%LOCALAPPDATA%\JDownloader 2\cfg\`; typed `TargetAppNotFound` if absent.
-- [ ] `ValidateManualPath`: confirm at least one `downloadList*.zip` exists and is a valid zip with expected entry naming pattern.
+- [x] `TryAutoDetect`: reads `HKCU\SOFTWARE\NeatDM` (`TempDirectory`, `DownloadDirectory`) via `IRegistryAccessor`; also sets `MetadataDir` to `%APPDATA%\NeatDM` (injectable for tests).
+- [x] `ValidateManualPath`: confirms `neatdb.db` exists, opens read-only, and has the expected `downloads` table. Sets `MetadataDir` only — `InstallOrConfigDir` (temp dir) is intentionally left `null` here since manual validation has no way to know it.
 
-### 2.3 `NdmListReader` (implements `IDownloadListReader`, `App = NDM`)
+**Tests (all passing):** auto-detect success/failure (missing values, missing directory), manual-path success/failure (missing dir, missing db, corrupt db, missing table), no post-validation file lock.
 
-- [ ] Query `downloads` table, map each row → `DownloadTaskSummary` (parse `status` text for percent where needed, or derive from `filesize`/known downloaded bytes — confirm which is authoritative per `docs/ndm.md` §5.1).
+### 2.2 `Jd2Locator` — DONE
 
-### 2.4 `Jd2ListReader` (implements `IDownloadListReader`, `App = JD2`)
+- [x] `TryAutoDetect`: probes `%LOCALAPPDATA%\JDownloader 2\cfg\` (injectable), validates at least one structurally-valid `downloadList*.zip` exists.
+- [x] `ValidateManualPath`: same structural validation against a user-supplied path.
+- [x] `PickNewest(IEnumerable<string>)`: public static helper, selects highest-numbered `downloadList<N>.zip`. **Must stay `public`** — an earlier draft made it `internal` and broke test visibility.
+- [x] **`DownloadDirectory` resolution**: reads `org.jdownloader.settings.GeneralSettings.json`'s `"defaultdownloadfolder"` key from `cfg\` as a soft, app-level default. **Important, discovered during this phase (not in original docs/jd2.md):** this value is NOT authoritative for any individual task — each package (`FilePackageStorable`) carries its own `downloadFolder`, and each link inherits its parent package's folder. `TargetAppLocation.DownloadDirectory` must only ever be treated as a fallback; per-task folder resolution is deferred to `Jd2ListReader`/`Jd2Exporter`/`Jd2Injector` in later phases. **`docs/jd2.md` update for this finding is the user's own action item, not Core's.**
 
-- [ ] Find newest `downloadList<N>.zip` (highest numeric suffix).
-- [ ] Parse `extraInfo`, all `<PackageID>` and `<PackageID>_<LinkIndex>` entries → flatten to `DownloadTaskSummary` list, `current`/`size` → downloaded/total bytes.
+**Tests (all passing):** auto-detect success (with/without settings file present), failure paths (missing cfg dir, no zips), manual-path success/failure (missing dir, no expected entries, corrupt zip), `PickNewest` ordering, newest-zip-used-when-stale-duplicate-present.
 
-**Tests (both locators + both readers, against Phase 0 fixtures):**
+### 2.3 `NdmListReader` — DONE
 
-- [ ] Auto-detect succeeds against a fixture-shaped environment (fake registry / fake `cfg\` dir).
-- [ ] Auto-detect fails cleanly (typed error, no throw) when nothing present.
-- [ ] Manual path validation accepts a well-formed fixture, rejects a malformed one (missing table, corrupt zip, wrong entry naming).
-- [ ] List reader correctly flattens fixture data into `DownloadTaskSummary`, including percent-complete math.
-- [ ] JD2 reader picks the *highest-numbered* `downloadList<N>.zip` when multiple are present in the fixture dir.
-- [ ] Read-only guarantee: scanning never creates a backup or touches the process guard (assert no `IBackupManager`/`IProcessGuard` calls via mock verification).
+- [x] Reads `downloads` table via `location.MetadataDir` (not `InstallOrConfigDir` — a deliberate distinction now that the two are separate fields).
+- [x] **Downloaded-byte resolution, in priority order:**
+  1. If `location.InstallOrConfigDir` (temp dir) is known AND the task's own subdirectory exists → sum real `seg.x*` file sizes (authoritative per docs/ndm.md §4.3). If the temp dir is known but the task's subdirectory is missing, this returns **0** (a real fact, not a reason to fall through to step 2 — this was a bug caught by testing and fixed).
+  2. Otherwise (temp dir itself unknown, e.g. after manual-path validation) → parse the `"Paused ( P% )"` status string as a best-effort estimate.
+
+**Tests (all passing):** single/multiple task summaries, authoritative byte-sum correctness, missing-task-directory-returns-zero (regression-tested), status-percentage fallback when temp dir unknown, missing metadata dir / missing db file failure paths, no post-scan file lock.
+
+### 2.4 `Jd2ListReader` — DONE
+
+- [x] Picks newest `downloadList<N>.zip` via `Jd2Locator.PickNewest`.
+- [x] Flattens every `<PackageID>_<LinkIndex>` entry across every package into a `DownloadTaskSummary`; package entries and `extraInfo` are skipped by regex, not specially parsed.
+- [x] `current`/`size` map directly to `DownloadedBytes`/`TotalBytes` — no separate authoritative-byte-counting step needed here, since JD2's own JSON already tracks live progress (unlike NDM).
+- [x] `Resumable` read from `properties.PROPERTY_RESUMEABLE`, defaults `false` if absent.
+
+**Known deferred work (not a gap in this phase, just not yet applicable):** per-package `downloadFolder` inheritance is real but has nowhere to live yet — `DownloadTaskSummary` has no folder field. Owed to `Jd2Exporter`/`Jd2Injector` in Phase 4, where actual file placement matters.
+
+**Tests (all passing):** single/multiple-package flattening, newest-zip selection over a stale duplicate, missing-cfg-dir/no-zips failure paths, empty-package-no-links, 100%-complete percent math, resumable-defaults-false-when-property-absent.
 
 ---
 

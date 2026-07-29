@@ -3,9 +3,11 @@ namespace Mdma.Core;
 /// <summary>Where a target app's relevant state lives, once found/confirmed.</summary>
 public sealed record TargetAppLocation(
     TargetApp App,
-    string InstallOrConfigDir,   // e.g. NDM's TempDirectory, or JD2's cfg\ folder
-    string DownloadDirectory,    // default output dir, needed for space checks on import
-    bool WasAutoDetected);
+    string? InstallOrConfigDir, // e.g. NDM's TempDirectory, or JD2's cfg\ folder. Null if unknown (e.g. NDM manual validation, which only confirms neatdb.db's folder).
+    string? MetadataDir, // NDM-specific: folder containing neatdb.db (%APPDATA%\NeatDM\ by default). Null for JD2, whose config already lives in InstallOrConfigDir.
+    string? DownloadDirectory, // App-level DEFAULT output dir only (NDM's registry value, or JD2's org.jdownloader.settings.GeneralSettings.json "defaultdownloadfolder"). Null if unknown. NOT authoritative for JD2: individual packages can override via their own "downloadFolder", which only Jd2ListReader/Jd2Injector can resolve per-task — callers must not assume this value is where a specific JD2 task's bytes actually live.
+    bool WasAutoDetected
+);
 
 /// <summary>
 /// Finds a target app's install/config location. Implemented once per target

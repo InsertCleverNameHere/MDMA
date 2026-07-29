@@ -13,7 +13,15 @@ public sealed class Jd2FixtureBuilder
 {
     public string CfgDirectory { get; }
 
-    private readonly List<(string packageId, string linkIndex, string filename, string url, long size, long current, long[] chunkProgress)> _links = new();
+    private readonly List<(
+        string packageId,
+        string linkIndex,
+        string filename,
+        string url,
+        long size,
+        long current,
+        long[] chunkProgress
+    )> _links = new();
     private readonly int _counter;
 
     public Jd2FixtureBuilder(string rootDir, int counter = 11283)
@@ -24,10 +32,24 @@ public sealed class Jd2FixtureBuilder
     }
 
     public Jd2FixtureBuilder WithLink(
-        string packageId, string linkIndex, string filename, string url,
-        long size, long current, params long[] chunkProgress)
+        string packageId,
+        string linkIndex,
+        string filename,
+        string url,
+        long size,
+        long current,
+        params long[] chunkProgress
+    )
     {
         _links.Add((packageId, linkIndex, filename, url, size, current, chunkProgress));
+        return this;
+    }
+
+    private string? _defaultDownloadFolder;
+
+    public Jd2FixtureBuilder WithDefaultDownloadFolder(string folder)
+    {
+        _defaultDownloadFolder = folder;
         return this;
     }
 
@@ -43,42 +65,58 @@ public sealed class Jd2FixtureBuilder
         var packageIds = _links.Select(l => l.packageId).Distinct();
         foreach (var pkgId in packageIds)
         {
-            var pkgJson = JsonSerializer.Serialize(new
-            {
-                uid = 1785268000000L,
-                name = "MDMA Injected Downloads",
-                downloadFolder = "D:\\Downloads",
-                created = 1785268000000L,
-                enabled = true
-            });
+            var pkgJson = JsonSerializer.Serialize(
+                new
+                {
+                    uid = 1785268000000L,
+                    name = "MDMA Injected Downloads",
+                    downloadFolder = "D:\\Downloads",
+                    created = 1785268000000L,
+                    enabled = true,
+                }
+            );
             WriteEntry(zip, pkgId, pkgJson);
         }
 
         foreach (var link in _links)
         {
-            var linkJson = JsonSerializer.Serialize(new
-            {
-                uid = 1785268000001L,
-                name = link.filename,
-                url = link.url,
-                host = new Uri(link.url).Host,
-                size = link.size,
-                current = link.current,
-                chunkProgress = link.chunkProgress,
-                availablestatus = "TRUE",
-                enabled = true,
-                created = 1785268000000L,
-                properties = new
+            var linkJson = JsonSerializer.Serialize(
+                new
                 {
-                    CHUNKS = link.chunkProgress.Length,
-                    PROPERTY_RESUMEABLE = true,
-                    URL_CONTENT = link.url
+                    uid = 1785268000001L,
+                    name = link.filename,
+                    url = link.url,
+                    host = new Uri(link.url).Host,
+                    size = link.size,
+                    current = link.current,
+                    chunkProgress = link.chunkProgress,
+                    availablestatus = "TRUE",
+                    enabled = true,
+                    created = 1785268000000L,
+                    properties = new
+                    {
+                        CHUNKS = link.chunkProgress.Length,
+                        PROPERTY_RESUMEABLE = true,
+                        URL_CONTENT = link.url,
+                    },
                 }
-            });
+            );
             WriteEntry(zip, $"{link.packageId}_{link.linkIndex}", linkJson);
         }
 
         WriteEntry(zip, "extraInfo", JsonSerializer.Serialize(new { version = 2 }));
+
+        if (_defaultDownloadFolder is not null)
+        {
+            var settingsPath = Path.Combine(
+                CfgDirectory,
+                "org.jdownloader.settings.GeneralSettings.json"
+            );
+            File.WriteAllText(
+                settingsPath,
+                JsonSerializer.Serialize(new { defaultdownloadfolder = _defaultDownloadFolder })
+            );
+        }
 
         return zipPath;
     }
@@ -88,7 +126,16 @@ public sealed class Jd2FixtureBuilder
     public string BuildStaleDuplicate(int staleCounter)
     {
         var stale = new Jd2FixtureBuilder(Path.GetDirectoryName(CfgDirectory)!, staleCounter);
-        foreach (var l in _links) stale.WithLink(l.packageId, l.linkIndex, l.filename, l.url, l.size, l.current, l.chunkProgress);
+        foreach (var l in _links)
+            stale.WithLink(
+                l.packageId,
+                l.linkIndex,
+                l.filename,
+                l.url,
+                l.size,
+                l.current,
+                l.chunkProgress
+            );
         return stale.Build();
     }
 
