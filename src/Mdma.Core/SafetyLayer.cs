@@ -27,12 +27,21 @@ public interface IAtomicWriter
 /// destructive write if this fails.</summary>
 public interface IBackupManager
 {
-    /// <summary>Snapshots everything MDMA is about to touch for `app` (db file,
-    /// relevant registry keys, cfg folder, etc. — target-specific) into the
-    /// working root's backups directory.</summary>
-    Result<BackupHandle> CreateBackup(TargetApp app, WorkingRoot workingRoot);
+    /// <summary>Snapshots everything MDMA is about to touch for the given
+    /// location into the working root's backups directory. taskNativeId is
+    /// required for NDM when the operation is scoped to a specific task (so
+    /// its <TempDirectory>\<TaskId>\ folder can be included per the locked-in
+    /// backup-scope decision) — pass null for JD2 or app-wide NDM operations.</summary>
+    Result<BackupHandle> CreateBackup(
+        TargetAppLocation location,
+        WorkingRoot workingRoot,
+        string? taskNativeId = null
+    );
 
-    Result<IReadOnlyList<BackupHandle>> ListBackups(WorkingRoot workingRoot, TargetApp? filterBy = null);
+    Result<IReadOnlyList<BackupHandle>> ListBackups(
+        WorkingRoot workingRoot,
+        TargetApp? filterBy = null
+    );
 }
 
 /// <summary>Restores a specific prior backup, undoing one MDMA operation.</summary>

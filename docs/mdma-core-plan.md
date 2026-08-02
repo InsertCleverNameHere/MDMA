@@ -118,30 +118,34 @@ public sealed record TargetAppLocation(
 
 ---
 
-## Phase 3 — Backup & Revert
+## Phase 3 — Backup & Revert — STATUS: COMPLETE
 
-### 3.1 `BackupManager` (implements `IBackupManager`)
+**Contract change made during this phase:** `IBackupManager.CreateBackup` (in
+`SafetyLayer.cs`) changed signature from `(TargetApp app, WorkingRoot workingRoot)`
+to `(TargetAppLocation location, WorkingRoot workingRoot, string? taskNativeId = null)`
+— the original signature had no way to know *where* files live or *which*
+task's temp folder to include, which is required for the NDM backup scope
+decision below.
 
-- [ ] Snapshot logic per target: NDM = copy `neatdb.db` + read/serialize relevant registry key values; JD2 = copy the active `downloadList<N>.zip` (and `cfg\` dir if broader state is relevant — confirm scope).
-- [ ] Stored under `<workingRoot>\backups\<timestamp>_<target>\`, using `IClock` for timestamp generation.
-- [ ] `ListBackups` reads that directory back, newest-first, optionally filtered by target.
-- [ ] Backup manifest per snapshot (what was captured, source paths, checksum) so revert can verify integrity before restoring.
+### 3.1 `BackupManager` — DONE
 
-### 3.2 `RevertManager` (implements `IRevertManager`)
+- [x] NDM scope: `neatdb.db` (via `location.MetadataDir`) + `<TempDirectory>\<taskNativeId>\` (via `location.InstallOrConfigDir`) if `taskNativeId` given and the directory exists. Missing task directory is not an error (task may not have started yet) — only a missing `neatdb.db` is a hard failure.
+- [x] JD2 scope (**resolved during this phase**, was an open question): only the current **newest** `downloadList<N>.zip`, not the whole `cfg\` folder. Rationale: injection always creates a new incremented-counter zip rather than overwriting, so the newest-at-backup-time file is the only pre-existing file genuinely at risk.
+- [x] Snapshot stored under `<workingRoot>\backups\<timestamp>_<target>_<shortguid>\`, with a `manifest.json` recording each file's original path, its relative path inside the snapshot, and its SHA-256.
+- [x] `ListBackups`: newest-first, optional target filter, skips (doesn't fail on) individual corrupt/unreadable snapshot manifests.
+- [x] Partial-failure cleanup: a failed `CreateBackup` deletes its own half-created snapshot directory (best-effort).
 
-- [ ] Restores files from a `BackupHandle` back to their original locations, using `IAtomicWriter` for each restored file.
-- [ ] Registry values (NDM) restored via `IRegistryAccessor`.
-- [ ] Requires target app process guard check before reverting too (can't safely overwrite files an app has open).
-- [ ] Verifies backup snapshot integrity (checksum) before restoring — corrupt backup should fail loudly (`RevertFailed`), not partially restore.
+**Tests (all passing):** NDM db+task-dir capture, byte-for-byte copy verification, db-only backup when no taskNativeId given, missing-db failure, missing-task-dir-is-not-an-error, JD2 newest-zip capture (incl. picking newest over a stale duplicate), JD2 no-zips failure, empty/newest-first/target-filtered listing, no-partial-directory-left-on-failure.
 
-**Tests:**
+### 3.2 `RevertManager` — DONE
 
-- [ ] Backup captures exact byte-for-byte copies of fixture files.
-- [ ] `ListBackups` returns correct ordering and target filtering.
-- [ ] Revert restores a modified fixture back to its pre-backup state exactly.
-- [ ] Revert against a corrupted/tampered backup snapshot fails with `RevertFailed`, does not touch live files.
-- [ ] Revert blocked (typed error) if process guard indicates target app is running.
-- [ ] `CreateBackup` failure is verified (via the orchestrator tests in Phase 5) to actually abort the parent operation — this is the Critical-step guarantee and deserves an explicit test, not just an assumption.
+- [x] Reads the backup's `manifest.json`, checks `IProcessGuard` for the target app (blocks with `TargetAppProcessRunning` if running — first real consumer of that error code).
+- [x] Verifies **every** entry's SHA-256 against the live snapshot files **before restoring anything** — a tampered/corrupted snapshot is refused wholesale, never partially applied.
+- [x] Restores each file via `IAtomicWriter`.
+
+**Tests (all passing):** NDM db restore, NDM task-segment-file restore, JD2 zip restore, blocked-when-process-running (+ confirms original file untouched in that case), tampered-snapshot-restores-nothing, missing-snapshot-file, missing-manifest, multi-file NDM backup restores all files correctly.
+
+**Known limitation, deliberately deferred (not urgent — revisit after Core is otherwise complete and end-to-end tested):** if a multi-file restore fails partway through (e.g. file 2 of 3), files already restored before the failure are **not** rolled back — `Revert` returns a `RevertFailed` error whose message says so explicitly, but the live state is left in a mixed state rather than atomically all-or-nothing. A real fix would need a two-phase restore (stage all restored files first, then commit all at once) or per-entry backup-of-current-state-before-overwrite so a failed revert could itself be reverted. Track this as a hardening pass before v1 ships, not before Phase 4/5/6 proceed.
 
 ---
 
