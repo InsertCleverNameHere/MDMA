@@ -22,6 +22,7 @@ public sealed class Jd2FixtureBuilder
         long current,
         long[] chunkProgress
     )> _links = new();
+    private readonly Dictionary<string, string> _downloadFolderByPackageId = new();
     private readonly int _counter;
 
     public Jd2FixtureBuilder(string rootDir, int counter = 11283)
@@ -29,6 +30,16 @@ public sealed class Jd2FixtureBuilder
         CfgDirectory = Path.Combine(rootDir, "cfg");
         Directory.CreateDirectory(CfgDirectory);
         _counter = counter;
+    }
+
+    /// <summary>Overrides the downloadFolder JSON value for a specific package
+    /// (default is a placeholder "D:\Downloads"). Needed by exporter tests
+    /// that must point at a real, existing folder containing actual staged
+    /// download bytes.</summary>
+    public Jd2FixtureBuilder WithPackageDownloadFolder(string packageId, string folder)
+    {
+        _downloadFolderByPackageId[packageId] = folder;
+        return this;
     }
 
     public Jd2FixtureBuilder WithLink(
@@ -47,6 +58,9 @@ public sealed class Jd2FixtureBuilder
 
     private string? _defaultDownloadFolder;
 
+    /// <summary>Writes org.jdownloader.settings.GeneralSettings.json with the
+    /// given "defaultdownloadfolder" value, read by Jd2Locator as the
+    /// app-level fallback download directory.</summary>
     public Jd2FixtureBuilder WithDefaultDownloadFolder(string folder)
     {
         _defaultDownloadFolder = folder;
@@ -65,12 +79,15 @@ public sealed class Jd2FixtureBuilder
         var packageIds = _links.Select(l => l.packageId).Distinct();
         foreach (var pkgId in packageIds)
         {
+            var folder = _downloadFolderByPackageId.TryGetValue(pkgId, out var f)
+                ? f
+                : "D:\\Downloads";
             var pkgJson = JsonSerializer.Serialize(
                 new
                 {
                     uid = 1785268000000L,
                     name = "MDMA Injected Downloads",
-                    downloadFolder = "D:\\Downloads",
+                    downloadFolder = folder,
                     created = 1785268000000L,
                     enabled = true,
                 }

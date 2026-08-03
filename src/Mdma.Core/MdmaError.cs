@@ -31,7 +31,8 @@ public enum MdmaErrorCode
     RevertFailed,
     RevertTargetNotFound,
 
-    // Injector / scan
+    // Export / Injector / scan
+    ExportFailed,
     InjectionFailed,
     ScanFailed,
 
@@ -49,7 +50,8 @@ public sealed record MdmaError(
     string Message,
     string? Details = null,
     string? SuggestedAction = null,
-    Exception? Inner = null)
+    Exception? Inner = null
+)
 {
     public override string ToString() =>
         Details is null ? $"[{Code}] {Message}" : $"[{Code}] {Message} — {Details}";
@@ -75,13 +77,16 @@ public readonly struct Result<T>
     }
 
     public static Result<T> Ok(T value) => new(true, value, null);
+
     public static Result<T> Fail(MdmaError error) => new(false, default, error);
+
     public static implicit operator Result<T>(MdmaError error) => Fail(error);
 
     /// <summary>Throws if called on a failed result — use only after checking IsSuccess.</summary>
-    public T Unwrap() => IsSuccess
-        ? Value!
-        : throw new InvalidOperationException($"Attempted to unwrap a failed Result: {Error}");
+    public T Unwrap() =>
+        IsSuccess
+            ? Value!
+            : throw new InvalidOperationException($"Attempted to unwrap a failed Result: {Error}");
 }
 
 /// <summary>Non-generic variant for operations with no return payload (e.g. Revert, Cleanup).</summary>
@@ -97,6 +102,8 @@ public readonly struct Result
     }
 
     public static Result Ok() => new(true, null);
+
     public static Result Fail(MdmaError error) => new(false, error);
+
     public static implicit operator Result(MdmaError error) => Fail(error);
 }

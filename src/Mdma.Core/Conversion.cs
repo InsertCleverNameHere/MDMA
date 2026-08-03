@@ -15,8 +15,10 @@ public interface IMdmaExporter
     Result<string> Export(
         DownloadTaskSummary task,
         TargetAppLocation sourceLocation,
+        WorkingRoot workingRoot,
         string destinationMdmaPath,
-        IProgress<OperationProgress>? progress = null);
+        IProgress<OperationProgress>? progress = null
+    );
 }
 
 /// <summary>Opens and verifies a .mdma file: checksum, manifest version, and
@@ -44,7 +46,8 @@ public interface IDownloadListInjector
     Result Inject(
         MdmaPackage package,
         TargetAppLocation destinationLocation,
-        IProgress<OperationProgress>? progress = null);
+        IProgress<OperationProgress>? progress = null
+    );
 }
 
 /// <summary>
@@ -61,14 +64,16 @@ public interface IConversionService
         DownloadTaskSummary task,
         TargetAppLocation sourceLocation,
         string userChosenDestinationPath,
-        IProgress<OperationProgress>? progress = null);
+        IProgress<OperationProgress>? progress = null
+    );
 
     /// <summary>Imports an existing .mdma file (e.g. one carried over from another
     /// machine) into a target app.</summary>
     Result ImportFromFile(
         string mdmaFilePath,
         TargetAppLocation destinationLocation,
-        IProgress<OperationProgress>? progress = null);
+        IProgress<OperationProgress>? progress = null
+    );
 
     /// <summary>Same-machine conversion: always round-trips through a temporary
     /// .mdma under <workingRoot>\.mdma-tmp\, deleted best-effort on success.
@@ -78,5 +83,6 @@ public interface IConversionService
         DownloadTaskSummary task,
         TargetAppLocation sourceLocation,
         TargetAppLocation destinationLocation,
-        IProgress<OperationProgress>? progress = null);
+        IProgress<OperationProgress>? progress = null
+    );
 }

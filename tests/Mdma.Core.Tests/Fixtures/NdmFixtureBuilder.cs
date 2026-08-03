@@ -15,6 +15,7 @@ public sealed class NdmFixtureBuilder
     public string NeatDbPath { get; }
 
     private readonly List<(int TaskId, string Filename, string Url, long TotalBytes, List<(long start, long end, long downloaded)> chunks)> _tasks = new();
+    private readonly Dictionary<int, (string? MimeType, List<(string Name, string Value)> Headers)> _metadataByTaskId = new();
 
     public NdmFixtureBuilder(string rootDir)
     {
@@ -36,6 +37,15 @@ public sealed class NdmFixtureBuilder
         params (long start, long end, long downloaded)[] chunks)
     {
         _tasks.Add((taskId, filename, url, totalBytes, chunks.ToList()));
+        return this;
+    }
+
+    /// <summary>Attaches mimetype and/or headers to the task with the given id
+    /// (must have already been added via WithTask). Optional -- only needed
+    /// by tests exercising NdmExporter's metadata-reading path.</summary>
+    public NdmFixtureBuilder WithMetadata(int taskId, string? mimeType = null, params (string Name, string Value)[] headers)
+    {
+        _metadataByTaskId[taskId] = (mimeType, headers.ToList());
         return this;
     }
 
@@ -80,8 +90,8 @@ public sealed class NdmFixtureBuilder
 
             var insert = conn.CreateCommand();
             insert.CommandText = """
-                INSERT INTO downloads (id, url, filename, filesize, status, resumable, folderpath, temppath)
-                VALUES ($id, $url, $filename, $filesize, $status, 1, $folderpath, $temppath);
+                INSERT INTO downloads (id, url, filename, filesize, status, resumable, folderpath, temppath, mimetype)
+                VALUES ($id, $url, $filename, $filesize, $status, 1, $folderpath, $temppath, $mimetype);
                 """;
             insert.Parameters.AddWithValue("$id", task.TaskId);
             insert.Parameters.AddWithValue("$url", task.Url);
@@ -90,7 +100,21 @@ public sealed class NdmFixtureBuilder
             insert.Parameters.AddWithValue("$status", status);
             insert.Parameters.AddWithValue("$folderpath", DownloadDirectory);
             insert.Parameters.AddWithValue("$temppath", TempDirectory);
+            var mimeType = _metadataByTaskId.TryGetValue(task.TaskId, out var meta) ? meta.MimeType : null;
+            insert.Parameters.AddWithValue("$mimetype", (object?)mimeType ?? DBNull.Value);
             insert.ExecuteNonQuery();
+
+            if (_metadataByTaskId.TryGetValue(task.TaskId, out var metaForHeaders))
+            {
+                foreach (var (name, value) in metaForHeaders.Headers)
+                {
+                    var headerInsert = conn.CreateCommand();
+                    headerInsert.CommandText = "INSERT INTO headers (id, header) VALUES ($id, $header);";
+                    headerInsert.Parameters.AddWithValue("$id", task.TaskId);
+                    headerInsert.Parameters.AddWithValue("$header", $"{name}: {value}");
+                    headerInsert.ExecuteNonQuery();
+                }
+            }
         }
 
         SqliteConnection.ClearPool(conn);

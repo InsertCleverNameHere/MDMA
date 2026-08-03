@@ -45,13 +45,13 @@ public class FixtureSmokeTests
 
         var valid = new MdmaFixtureBuilder().WithChunk(0, 0, 1023, chunkBytes)
             .BuildValid(Path.Combine(dir, "valid.mdma"));
-        var badChecksum = new MdmaFixtureBuilder().WithChunk(0, 0, 1023, chunkBytes)
-            .BuildWithBadChecksum(Path.Combine(dir, "bad-checksum.mdma"));
+        var badChunk = new MdmaFixtureBuilder().WithChunk(0, 0, 1023, chunkBytes)
+            .BuildWithCorruptChunk(Path.Combine(dir, "bad-chunk.mdma"), chunkIndex: 0);
         var noManifest = new MdmaFixtureBuilder().WithChunk(0, 0, 1023, chunkBytes)
             .BuildWithoutManifest(Path.Combine(dir, "no-manifest.mdma"));
 
         Assert.That(File.Exists(valid), Is.True);
-        Assert.That(File.Exists(badChecksum), Is.True);
+        Assert.That(File.Exists(badChunk), Is.True);
         Assert.That(File.Exists(noManifest), Is.True);
 
         Directory.Delete(dir, recursive: true);
