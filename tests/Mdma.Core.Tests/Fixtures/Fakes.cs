@@ -49,6 +49,88 @@ public sealed class FakeProcessLister : IProcessLister
     }
 }
 
+/// <summary>Fake IMdmaExporter for testing ConversionService orchestration --
+/// records whether/how many times Export was called, without touching real
+/// files. Configure ResultToReturn to simulate success or failure.</summary>
+public sealed class FakeMdmaExporter : IMdmaExporter
+{
+    public TargetApp SourceApp { get; set; }
+    public int CallCount { get; private set; }
+    public Result<string> ResultToReturn { get; set; } = Result<string>.Ok("fake-output.mdma");
+
+    public Result<string> Export(DownloadTaskSummary task, TargetAppLocation sourceLocation, WorkingRoot workingRoot, string destinationMdmaPath, IProgress<OperationProgress>? progress = null)
+    {
+        CallCount++;
+        return ResultToReturn;
+    }
+}
+
+/// <summary>Fake IDownloadListInjector for testing ConversionService
+/// orchestration -- records call count, configurable result.</summary>
+public sealed class FakeDownloadListInjector : IDownloadListInjector
+{
+    public TargetApp TargetApp { get; set; }
+    public int CallCount { get; private set; }
+    public Result ResultToReturn { get; set; } = Result.Ok();
+
+    public Result Inject(MdmaPackage package, TargetAppLocation destinationLocation, IProgress<OperationProgress>? progress = null)
+    {
+        CallCount++;
+        return ResultToReturn;
+    }
+}
+
+/// <summary>Fake IMdmaLoader for testing ConversionService orchestration --
+/// records call count, configurable result. DefaultPackage() builds a
+/// minimal-but-valid MdmaPackage for tests that need Load to succeed.</summary>
+public sealed class FakeMdmaLoader : IMdmaLoader
+{
+    public int CallCount { get; private set; }
+    public Result<MdmaPackage> ResultToReturn { get; set; } = Result<MdmaPackage>.Ok(DefaultPackage());
+
+    public Result<MdmaPackage> Load(string mdmaFilePath, WorkingRoot workingRoot)
+    {
+        CallCount++;
+        return ResultToReturn;
+    }
+
+    public static MdmaPackage DefaultPackage()
+    {
+        var manifest = new MdmaManifest(
+            MdmaVersion: 1,
+            Origin: TargetApp.NDM,
+            Url: "https://example.com/f.bin",
+            Filename: "f.bin",
+            TotalBytes: 100,
+            MimeType: null,
+            Headers: Array.Empty<KeyValuePair<string, string>>(),
+            CreatedEpochMillis: 0,
+            Chunks: new[] { new ChunkRange(0, 0, 99, 100) });
+        return new MdmaPackage(manifest, new Dictionary<int, string> { [0] = "/fake/chunk_0.bin" }, "/fake/source.mdma");
+    }
+}
+
+/// <summary>Fake IBackupManager for testing ConversionService orchestration --
+/// records call count, configurable result.</summary>
+public sealed class FakeBackupManager : IBackupManager
+{
+    public int CreateBackupCallCount { get; private set; }
+    public Result<BackupHandle> CreateBackupResultToReturn { get; set; } =
+        Result<BackupHandle>.Ok(new BackupHandle("fake-backup", TargetApp.NDM, DateTimeOffset.UtcNow, "/fake/backup"));
+
+    public Result<IReadOnlyList<BackupHandle>> ListBackupsResultToReturn { get; set; } =
+        Result<IReadOnlyList<BackupHandle>>.Ok(Array.Empty<BackupHandle>());
+
+    public Result<BackupHandle> CreateBackup(TargetAppLocation location, WorkingRoot workingRoot, string? taskNativeId = null)
+    {
+        CreateBackupCallCount++;
+        return CreateBackupResultToReturn;
+    }
+
+    public Result<IReadOnlyList<BackupHandle>> ListBackups(WorkingRoot workingRoot, TargetApp? filterBy = null) =>
+        ListBackupsResultToReturn;
+}
+
 /// <summary>Fixed-time fake for IClock — deterministic timestamps in tests.</summary>
 public sealed class FakeClock : IClock
 {

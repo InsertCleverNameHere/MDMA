@@ -26,12 +26,14 @@ Needed early because every phase below should ship with tests, and several piece
 ## Phase 1 — Foundation (everything else depends on this) — STATUS: COMPLETE
 
 ### 1.1 `WorkingDirectoryProvider` (implements `IWorkingDirectoryProvider`) — DONE
+
 - [x] Explicit override path: validate writability via real write+delete probe.
 - [x] Portable default: `AppContext.BaseDirectory + "MDMA_Work"`, create if missing, probe writability.
 - [x] Fallback: `%LOCALAPPDATA%\MDMA\work`, only reached if portable default fails; surfaces via `IsFallback` flag on a successful `Result` (caller displays the warning).
 - [ ] Path-conflict check — **deliberately deferred to Phase 5**, needs `TargetAppLocation` data from discovery that doesn't exist at this layer. Not a gap, a sequencing decision.
 
 **Tests (all passing):**
+
 - [x] Explicit override honored when writable.
 - [x] Explicit override rejected (typed error) when unwritable / path cannot be created.
 - [x] Falls through to portable default when no override given.
@@ -40,6 +42,7 @@ Needed early because every phase below should ship with tests, and several piece
 - [x] Idempotent for same override.
 
 ### 1.2 `SpaceChecker` (implements `ISpaceChecker`) — DONE
+
 - [x] Uses `IDiskSpaceSource` seam, not `DriveInfo` directly.
 - [x] Applies safety margin (15%, `SpaceChecker.SafetyMarginFraction`) on top of `requiredBytes`.
 - [x] Populates `MdmaError.Details` with exact required-vs-available numbers, human-readable (GB/MB/KB).
@@ -48,6 +51,7 @@ Needed early because every phase below should ship with tests, and several piece
 **Tests (all passing):** sufficient space, insufficient source, insufficient destination, margin-boundary math (both sides), shortfall message content, per-path fake behavior, negative-input handling.
 
 ### 1.3 `AtomicWriter` (implements `IAtomicWriter`) — DONE
+
 - [x] Temp file created in the **same directory** as destination (guarantees same-volume atomic rename by construction, not by detection).
 - [x] Renames over destination only after `writeAction` completes without throwing.
 - [x] Exception mid-write: temp file deleted (best-effort), destination untouched, `AtomicWriteFailed` returned.
@@ -55,6 +59,7 @@ Needed early because every phase below should ship with tests, and several piece
 **Tests (all passing):** successful write (new + pre-existing destination), exception leaves original untouched, no orphaned temp file after failure, no-op writeAction produces typed error, destination directory auto-created, temp-file-same-directory invariant directly asserted, concurrency-out-of-scope documented as an explicit test.
 
 ### 1.4 `IProcessGuard` implementation (`ProcessGuard`) — DONE
+
 - [x] Uses `IProcessLister` seam.
 - [x] Per-target process name mapping: NDM = `NeatDownloadManager.exe`; JD2 = `JDownloader2.exe` **and** `JDownloader.exe` (both variants checked).
 
@@ -65,6 +70,7 @@ Needed early because every phase below should ship with tests, and several piece
 ## Phase 2 — Discovery & Scanning — STATUS: COMPLETE
 
 **Model change made during this phase:** `TargetAppLocation` (in `Discovery.cs`) gained a `MetadataDir` field and both `InstallOrConfigDir` and `DownloadDirectory` became nullable, because NDM and JD2 both turned out to have split/partial location knowledge depending on auto-detect vs. manual-path validation:
+
 ```csharp
 public sealed record TargetAppLocation(
     TargetApp App,
@@ -75,12 +81,14 @@ public sealed record TargetAppLocation(
 ```
 
 ### 2.1 `NdmLocator` — DONE
+
 - [x] `TryAutoDetect`: reads `HKCU\SOFTWARE\NeatDM` (`TempDirectory`, `DownloadDirectory`) via `IRegistryAccessor`; also sets `MetadataDir` to `%APPDATA%\NeatDM` (injectable for tests).
 - [x] `ValidateManualPath`: confirms `neatdb.db` exists, opens read-only, and has the expected `downloads` table. Sets `MetadataDir` only — `InstallOrConfigDir` (temp dir) is intentionally left `null` here since manual validation has no way to know it.
 
 **Tests (all passing):** auto-detect success/failure (missing values, missing directory), manual-path success/failure (missing dir, missing db, corrupt db, missing table), no post-validation file lock.
 
 ### 2.2 `Jd2Locator` — DONE
+
 - [x] `TryAutoDetect`: probes `%LOCALAPPDATA%\JDownloader 2\cfg\` (injectable), validates at least one structurally-valid `downloadList*.zip` exists.
 - [x] `ValidateManualPath`: same structural validation against a user-supplied path.
 - [x] `PickNewest(IEnumerable<string>)`: public static helper, selects highest-numbered `downloadList<N>.zip`. **Must stay `public`** — an earlier draft made it `internal` and broke test visibility.
@@ -89,6 +97,7 @@ public sealed record TargetAppLocation(
 **Tests (all passing):** auto-detect success (with/without settings file present), failure paths (missing cfg dir, no zips), manual-path success/failure (missing dir, no expected entries, corrupt zip), `PickNewest` ordering, newest-zip-used-when-stale-duplicate-present.
 
 ### 2.3 `NdmListReader` — DONE
+
 - [x] Reads `downloads` table via `location.MetadataDir` (not `InstallOrConfigDir` — a deliberate distinction now that the two are separate fields).
 - [x] **Downloaded-byte resolution, in priority order:**
   1. If `location.InstallOrConfigDir` (temp dir) is known AND the task's own subdirectory exists → sum real `seg.x*` file sizes (authoritative per docs/ndm.md §4.3). If the temp dir is known but the task's subdirectory is missing, this returns **0** (a real fact, not a reason to fall through to step 2 — this was a bug caught by testing and fixed).
@@ -97,6 +106,7 @@ public sealed record TargetAppLocation(
 **Tests (all passing):** single/multiple task summaries, authoritative byte-sum correctness, missing-task-directory-returns-zero (regression-tested), status-percentage fallback when temp dir unknown, missing metadata dir / missing db file failure paths, no post-scan file lock.
 
 ### 2.4 `Jd2ListReader` — DONE
+
 - [x] Picks newest `downloadList<N>.zip` via `Jd2Locator.PickNewest`.
 - [x] Flattens every `<PackageID>_<LinkIndex>` entry across every package into a `DownloadTaskSummary`; package entries and `extraInfo` are skipped by regex, not specially parsed.
 - [x] `current`/`size` map directly to `DownloadedBytes`/`TotalBytes` — no separate authoritative-byte-counting step needed here, since JD2's own JSON already tracks live progress (unlike NDM).
@@ -118,6 +128,7 @@ task's temp folder to include, which is required for the NDM backup scope
 decision below.
 
 ### 3.1 `BackupManager` — DONE
+
 - [x] NDM scope: `neatdb.db` (via `location.MetadataDir`) + `<TempDirectory>\<taskNativeId>\` (via `location.InstallOrConfigDir`) if `taskNativeId` given and the directory exists. Missing task directory is not an error (task may not have started yet) — only a missing `neatdb.db` is a hard failure.
 - [x] JD2 scope (**resolved during this phase**, was an open question): only the current **newest** `downloadList<N>.zip`, not the whole `cfg\` folder. Rationale: injection always creates a new incremented-counter zip rather than overwriting, so the newest-at-backup-time file is the only pre-existing file genuinely at risk.
 - [x] Snapshot stored under `<workingRoot>\backups\<timestamp>_<target>_<shortguid>\`, with a `manifest.json` recording each file's original path, its relative path inside the snapshot, and its SHA-256.
@@ -127,6 +138,7 @@ decision below.
 **Tests (all passing):** NDM db+task-dir capture, byte-for-byte copy verification, db-only backup when no taskNativeId given, missing-db failure, missing-task-dir-is-not-an-error, JD2 newest-zip capture (incl. picking newest over a stale duplicate), JD2 no-zips failure, empty/newest-first/target-filtered listing, no-partial-directory-left-on-failure.
 
 ### 3.2 `RevertManager` — DONE
+
 - [x] Reads the backup's `manifest.json`, checks `IProcessGuard` for the target app (blocks with `TargetAppProcessRunning` if running — first real consumer of that error code).
 - [x] Verifies **every** entry's SHA-256 against the live snapshot files **before restoring anything** — a tampered/corrupted snapshot is refused wholesale, never partially applied.
 - [x] Restores each file via `IAtomicWriter`.
@@ -148,23 +160,27 @@ accepts but ignores the parameter (it doesn't need staging, since NDM's
 segments are already separate physical files).
 
 ### 4.1 `.mdma` package format (shared writer/reader) — DONE
+
 - [x] `MdmaPackageFormat.cs`: on-disk DTOs (`MdmaManifestDto`/`MdmaTaskDto`/`MdmaChunkDto`/`MdmaHeaderDto`, nested per architecture.md) kept deliberately separate from the domain `MdmaManifest` record. `MdmaChecksumDto` + `MdmaChecksumHelper` implement the **final hash-of-hashes shape**: `checksum.sha256` is JSON `{"chunk_hashes": {"<index>": "<hex sha256>"}, "manifest_hash": "<hex sha256 of chunk hashes ordered by index, joined by \n>"}`.
 - [x] `MdmaPackageWriter`: computes `downloaded_bytes` from the **actual file length on disk**, never a caller-supplied value — verified by a dedicated test.
 - [x] `MdmaLoader`: verifies version, structural consistency (manifest chunk list == checksum chunk list), **every** per-chunk hash, then the manifest hash — all before extracting a single byte to disk. Stages chunks under `<workingRoot>\.mdma-tmp\extracted-<guid>\`.
 - [x] `MdmaFixtureBuilder` (Phase 0) rewritten to match this exact format — the earlier single-hash version was replaced (this was the flagged deferred item from Phase 0/2, now resolved).
 
 ### 4.2 `NdmExporter` — DONE
+
 - [x] Parses `segments.bin` (24-byte records), packages each `seg.xN` as a chunk. Chunk identity/ordering comes from `segment_id`, not the `next_segment_id` linked-list pointer.
 - [x] Pulls `mimetype` + `headers` from `neatdb.db` directly (not on `DownloadTaskSummary`).
 - [x] Needs both `location.InstallOrConfigDir` (temp dir) and `location.MetadataDir` (db) — fails cleanly if either is null.
 
 ### 4.3 `Jd2Exporter` — DONE
+
 - [x] Resolves per-task download folder: **package-level `downloadFolder` always wins if the package entry exists at all**, even if that folder doesn't resolve to a real path; app-level `location.DownloadDirectory` fallback only applies when the package entry itself is missing from the zip. (Explicitly tested both ways — this is a real priority-order decision, not an accident.)
 - [x] Slices the single sparse `.part`/completed file into per-chunk staged temp files under `workingRoot`.
 - [x] `mimeType` always `null`, `headers` always empty — `docs/jd2.md`'s link JSON schema has no fields for either (unlike NDM's separate headers table).
 - [x] **Documented assumption, not confirmed in docs/jd2.md** (which only shows a `CHUNKS=1` example): multi-chunk files split into `CHUNKS` equal-size contiguous ranges (remainder on the last chunk), and `chunkProgress[i]` is an **absolute file offset**. If a real multi-chunk JD2 capture ever contradicts this, `Jd2Exporter.SliceChunks` and the two tests exercising it (`Export_MultiChunk_Slices_Correct_Byte_Ranges`, `Export_MultiChunk_Handles_Partial_Progress_Per_Chunk`) are where to start.
 
 ### 4.4 `NdmInjector` — DONE
+
 - [x] `NewTaskID = LastDownloadID (registry) + 1`, defaults to `1` if the registry value is absent.
 - [x] Refuses to write into a pre-existing task directory at the computed ID (safety guard, not explicitly required by the plan but added deliberately).
 - [x] `neatdb.db` mutated via `IAtomicWriter` copy-modify-swap (copy → open copy → INSERT → atomic rename over original).
@@ -172,6 +188,7 @@ segments are already separate physical files).
 - [x] **Known limitation, same class as RevertManager's (Phase 3.2):** if the registry update fails *after* the db insert already succeeded, the db row is not rolled back. Documented in the class doc comment; not fixed now, same "revisit after Core is otherwise complete" deferral.
 
 ### 4.5 `Jd2Injector` — DONE
+
 - [x] Reconstructs a sparse `.part` file by seeking to each chunk's `StartByte` and writing its staged bytes (mirrors JD2's own `RandomAccessFile.seek()` model).
 - [x] New package ID = `max(existing top-level numeric entries) + 1`, explicitly excluding `extraInfo` and link entries (anything containing `_`).
 - [x] Creates `downloadList<N+1>.zip` duplicating every existing entry, **never deletes the old zip** (matches docs/jd2.md's crash-protection design).
@@ -188,20 +205,53 @@ segments are already separate physical files).
 
 ## Phase 5 — Conversion Orchestrator
 
-### 5.1 `ConversionService` (implements `IConversionService`)
-- [ ] `ExportToFile`: space check (source) → export. No backup/process-guard needed (read-only against source... **except** confirm: does export require the source app's process guard too, since e.g. NDM's SQLite file could be locked mid-download? Needs explicit decision — see Open Questions below.)
-- [ ] `ImportFromFile`: process guard (destination) → space check (destination) → backup (destination) → load `.mdma` → inject → done.
-- [ ] `ConvertSameMachine`: process guard (source + destination) → space check (both) → backup (destination) → export to `<workingRoot>\.mdma-tmp\<guid>.mdma.partial` → finalize rename → import → best-effort delete of temp `.mdma`. Must be implemented as literal calls to `ExportToFile`/`ImportFromFile` against the temp path, not parallel logic.
-- [ ] Progress reporting threaded through every stage via `IProgress<OperationProgress>`.
-- [ ] Enforces `StepCriticality`: Critical step failure aborts immediately and returns without attempting later steps; BestEffort failure (temp cleanup) is caught, logged, and does not affect the returned `Result`'s success state.
+Split into sub-phases (this phase was originally one large block — divided per the same incremental, one-piece-at-a-time pattern used in Phases 1–4). `ITempCleanupService` and the Phase 1 path-conflict check are folded in here since they only became implementable once discovery (Phase 2) and injection (Phase 4) existed.
 
-**Tests:**
-- [ ] Full orchestration order verified via mock call sequence (process guard → space → backup → export/import → cleanup), for all three entry points.
-- [ ] Backup failure aborts before any write occurs (mock injector/exporter never invoked).
-- [ ] Process-guard failure aborts before backup is even attempted.
-- [ ] Insufficient space on either end aborts before backup.
-- [ ] Cleanup failure after a successful `ConvertSameMachine` still returns `Result.Ok` (best-effort semantics verified end-to-end, not just at the unit level).
-- [ ] Startup orphan sweep (of `.mdma-tmp\`) — decide if this lives in `IConversionService` or a separate `ITempCleanupService`; either way needs a test that leftover `.partial`/`.mdma` files from a simulated crash are detected and reported.
+### 5.1 Path-conflict check (deferred from Phase 1)
+
+- [ ] Add the check to `WorkingDirectoryProvider.Resolve` (or a variant called with known `TargetAppLocation`s): reject a working root nested inside a source or destination app's own directory (`InstallOrConfigDir`/`MetadataDir`). Returns `WorkingDirectoryPathConflict` (error code already exists in `MdmaErrorCode`, unused until now).
+- [ ] Decide exact call shape: does `Resolve` gain an optional `IEnumerable<TargetAppLocation>` parameter, or is this a separate method called by `ConversionService` after both locations are known? Lean toward the latter — `WorkingDirectoryProvider` shouldn't need to know about discovery types just for this one check.
+
+**Tests:** working root nested inside source location's temp dir → rejected; nested inside destination's metadata dir → rejected; sibling (not nested) directory → allowed; no locations provided → behaves exactly as before (backward compatible).
+
+### 5.2 `ITempCleanupService` (new interface + implementation)
+
+- [ ] New interface: sweeps `<workingRoot>\.mdma-tmp\` for orphaned `.mdma`/`.mdma.partial`/extraction folders left by a crashed prior run. Returns what it found/removed so CLI/GUI can report it.
+- [ ] Decide exact contract shape (e.g. `Result<IReadOnlyList<string>> SweepOrphans(WorkingRoot workingRoot)`), matching the `Result`-based pattern used everywhere else in Core.
+- [ ] Best-effort by nature — a file that can't be deleted (locked, in use) is skipped and reported, not a hard failure of the sweep.
+
+**Tests:** sweep removes orphaned temp files/folders and reports them; a locked/undeletable file is skipped without failing the whole sweep; empty `.mdma-tmp\` (or missing entirely) returns cleanly with nothing to report.
+
+### 5.3 `ConversionService.ExportToFile`
+
+- [ ] Order: process guard (source) → space check (working root, using the task's `DownloadedBytes` as the required size) → call the source's `IMdmaExporter` → return the written `.mdma` path.
+- [ ] No backup needed here — export never mutates the source app's own state (`NdmExporter`/`Jd2Exporter` are read-only against NDM/JD2's files).
+- [ ] Progress reporting threaded through via `IProgress<OperationProgress>`.
+
+**Tests:** full order verified via mock/spy sequence; process-guard failure aborts before space check or export; insufficient space aborts before export is attempted; successful export returns the correct path.
+
+### 5.4 `ConversionService.ImportFromFile`
+
+- [ ] Order: process guard (destination) → space check (destination's `DownloadDirectory`/`InstallOrConfigDir`, using the `.mdma` manifest's `TotalBytes` or summed `DownloadedBytes` as required size) → backup (destination, **Critical** — abort before any write if this fails) → `MdmaLoader.Load` → destination's `IDownloadListInjector.Inject`.
+- [ ] Progress reporting threaded through.
+
+**Tests:** full order verified via mock/spy sequence; backup failure aborts before `MdmaLoader.Load` or injection ever run; process-guard failure aborts before backup is attempted; insufficient space aborts before backup.
+
+### 5.5 `ConversionService.ConvertSameMachine`
+
+- [ ] Order: process guard (source **and** destination) → space checks (both sides) → backup (destination, Critical) → `ExportToFile` against a temp path under `<workingRoot>\.mdma-tmp\<guid>.mdma` → `ImportFromFile` against that temp path → best-effort delete of the temp `.mdma` (failure here is logged, does **not** fail the overall `Result`).
+- [ ] Must literally call the `ExportToFile`/`ImportFromFile` methods just built in 5.3/5.4 — no parallel/duplicated logic, per the standing "always round-trip through a real `.mdma`, even same-machine" design decision.
+- [ ] Enforces `StepCriticality` consistently: Critical failures abort immediately without attempting later steps; the cleanup step is explicitly BestEffort.
+
+**Tests:** full order verified via mock/spy sequence; cleanup failure after an otherwise-successful conversion still returns `Result.Ok` (this is the concrete test for the Critical vs. BestEffort distinction promised all the way back in architecture.md §8); backup failure aborts before export is attempted; confirms `ExportToFile`/`ImportFromFile` are the actual methods invoked (not reimplemented logic) — e.g. via a spy/count assertion.
+
+### 5.6 True end-to-end round-trip tests (the coverage gap flagged at the end of Phase 4)
+
+- [ ] `NdmExporter` → `.mdma` → `Jd2Injector`, using `ConversionService.ConvertSameMachine` (or the two steps manually chained), asserting the resulting JD2 state (zip entries, reconstructed `.part` file bytes) matches the original NDM task.
+- [ ] `Jd2Exporter` → `.mdma` → `NdmInjector`, same idea in reverse.
+- [ ] At least one partial-download (not fully-completed) task in each direction, since that's the common real-world case per the plan's original Phase 4 test checklist.
+
+**Tests:** the above, using real fixture-built NDM/JD2 environments on both the source and destination side (two separate fixture roots standing in for "two machines" conceptually, even though same-machine mechanically) — byte-for-byte verification of the final injected state against the original source bytes.
 
 ---
 
@@ -212,6 +262,7 @@ segments are already separate physical files).
 - [ ] Log format decision: structured (JSON lines) vs. plain text — recommend JSON lines for future tooling/debugging, human-readable enough on its own.
 
 **Tests:**
+
 - [ ] Log file created in the resolved working root, not AppData, under normal conditions.
 - [ ] Falls back consistently with `IWorkingDirectoryProvider`'s own fallback behavior when the working root logs subdirectory isn't writable.
 - [ ] Critical vs. BestEffort steps produce distinguishable log levels (spot-check a handful, not exhaustive).

@@ -252,6 +252,28 @@ public class NdmInjectorTests
     }
 
     [Test]
+    public void Inject_Succeeds_Into_Genuinely_Fresh_Environment_With_No_Existing_NeatDb()
+    {
+        // No NdmFixtureBuilder.Build() call at all -- simulates a truly fresh
+        // NDM install where neatdb.db has never been created.
+        var tempDir = Path.Combine(_testDir, "NDM Temp");
+        var metaDir = Path.Combine(_testDir, "meta");
+        Directory.CreateDirectory(tempDir);
+        Directory.CreateDirectory(metaDir);
+        Assert.That(File.Exists(Path.Combine(metaDir, "neatdb.db")), Is.False, "precondition: db must not exist yet");
+
+        var location = new TargetAppLocation(TargetApp.NDM, tempDir, metaDir, DownloadDirectory: null, WasAutoDetected: true);
+        var package = BuildLoadedPackage("f.bin", "https://example.com/f.bin", 5, null, new[] { (0L, 4L, new byte[] { 1, 2, 3, 4, 5 }) });
+
+        var injector = new NdmInjector(new FakeRegistryAccessor(), new AtomicWriter());
+        var result = injector.Inject(package, location);
+
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(File.Exists(Path.Combine(metaDir, "neatdb.db")), Is.True, "a fresh, correctly-schemaed db should have been created");
+        Assert.That(File.Exists(Path.Combine(tempDir, "1", "seg.x0")), Is.True);
+    }
+
+    [Test]
     public void Inject_Two_Tasks_Sequentially_Gets_Distinct_Incrementing_Ids()
     {
         var (fixture, location) = SetUpEmptyNdmEnvironment();

@@ -153,7 +153,18 @@ public sealed class NdmInjector : IDownloadListInjector
 
     private static void InsertIntoDatabase(string originalDbPath, string tempDestPath, int newTaskId, MdmaManifest manifest, TargetAppLocation location)
     {
-        File.Copy(originalDbPath, tempDestPath, overwrite: true);
+        if (File.Exists(originalDbPath))
+        {
+            File.Copy(originalDbPath, tempDestPath, overwrite: true);
+        }
+        else
+        {
+            // Genuinely fresh NDM install -- no neatdb.db exists yet. Create
+            // one with the correct schema instead of assuming a file exists
+            // to copy from (matches the BackupManager no-op-for-fresh-install
+            // fix -- both halves are needed for a truly fresh destination to work).
+            CreateFreshDatabase(tempDestPath);
+        }
 
         using var conn = new SqliteConnection($"Data Source={tempDestPath};Pooling=False");
         conn.Open();
@@ -186,6 +197,26 @@ public sealed class NdmInjector : IDownloadListInjector
             headerInsert.ExecuteNonQuery();
         }
 
+        SqliteConnection.ClearPool(conn);
+    }
+
+    private static void CreateFreshDatabase(string dbPath)
+    {
+        using var conn = new SqliteConnection($"Data Source={dbPath};Pooling=False");
+        conn.Open();
+        var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            CREATE TABLE downloads (
+                id INTEGER PRIMARY KEY, url TEXT, method TEXT, filename TEXT,
+                ltype TEXT, filesize NUMERIC, category TEXT, status TEXT,
+                bandwidthlimit NUMERIC, connections NUMERIC, lasttry NUMERIC,
+                firsttry NUMERIC, useragent TEXT, resumable NUMERIC, pageurl TEXT,
+                pagetitle TEXT, hittitle TEXT, mimetype TEXT, errortext TEXT,
+                urla TEXT, postdata TEXT, folderpath TEXT, temppath TEXT
+            );
+            CREATE TABLE headers (id INTEGER, header TEXT);
+            """;
+        cmd.ExecuteNonQuery();
         SqliteConnection.ClearPool(conn);
     }
 

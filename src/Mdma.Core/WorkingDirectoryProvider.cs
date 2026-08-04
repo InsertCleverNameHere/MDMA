@@ -18,10 +18,14 @@ public sealed class WorkingDirectoryProvider : IWorkingDirectoryProvider
     private readonly string _baseDirectory;
     private readonly string _localAppDataDirectory;
 
-    public WorkingDirectoryProvider(string? baseDirectory = null, string? localAppDataDirectory = null)
+    public WorkingDirectoryProvider(
+        string? baseDirectory = null,
+        string? localAppDataDirectory = null
+    )
     {
         _baseDirectory = baseDirectory ?? AppContext.BaseDirectory;
-        _localAppDataDirectory = localAppDataDirectory
+        _localAppDataDirectory =
+            localAppDataDirectory
             ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
     }
 
@@ -30,7 +34,8 @@ public sealed class WorkingDirectoryProvider : IWorkingDirectoryProvider
         if (!string.IsNullOrWhiteSpace(explicitOverride))
         {
             var ensured = EnsureDirectoryExists(explicitOverride);
-            if (!ensured.IsSuccess) return ensured.Error!;
+            if (!ensured.IsSuccess)
+                return ensured.Error!;
 
             var probe = ProbeWritable(explicitOverride);
             if (!probe.IsSuccess)
@@ -39,33 +44,94 @@ public sealed class WorkingDirectoryProvider : IWorkingDirectoryProvider
                     MdmaErrorCode.WorkingDirectoryUnwritable,
                     "The specified working directory is not writable.",
                     Details: explicitOverride,
-                    SuggestedAction: "Choose a different --workdir, or fix permissions on this folder.");
+                    SuggestedAction: "Choose a different --workdir, or fix permissions on this folder."
+                );
             }
 
-            return Result<WorkingRoot>.Ok(new WorkingRoot(explicitOverride, IsPortableDefault: false, IsFallback: false));
+            return Result<WorkingRoot>.Ok(
+                new WorkingRoot(explicitOverride, IsPortableDefault: false, IsFallback: false)
+            );
         }
 
         var portablePath = Path.Combine(_baseDirectory, PortableFolderName);
         if (EnsureDirectoryExists(portablePath).IsSuccess && ProbeWritable(portablePath).IsSuccess)
         {
-            return Result<WorkingRoot>.Ok(new WorkingRoot(portablePath, IsPortableDefault: true, IsFallback: false));
+            return Result<WorkingRoot>.Ok(
+                new WorkingRoot(portablePath, IsPortableDefault: true, IsFallback: false)
+            );
         }
 
-        var fallbackPath = Path.Combine(_localAppDataDirectory, FallbackSubfolder1, FallbackSubfolder2);
+        var fallbackPath = Path.Combine(
+            _localAppDataDirectory,
+            FallbackSubfolder1,
+            FallbackSubfolder2
+        );
         if (EnsureDirectoryExists(fallbackPath).IsSuccess && ProbeWritable(fallbackPath).IsSuccess)
         {
             // IsFallback = true is the signal callers (Cli/Gui) check to surface a
             // visible warning to the user, per architecture.md §7 — resolution still
             // succeeds, it just wasn't able to honor the portable-by-default goal.
-            return Result<WorkingRoot>.Ok(new WorkingRoot(fallbackPath, IsPortableDefault: false, IsFallback: true));
+            return Result<WorkingRoot>.Ok(
+                new WorkingRoot(fallbackPath, IsPortableDefault: false, IsFallback: true)
+            );
         }
 
         return new MdmaError(
             MdmaErrorCode.WorkingDirectoryUnwritable,
             "Could not find any writable location for the MDMA working directory.",
             Details: $"Tried portable default '{portablePath}' and fallback '{fallbackPath}'.",
-            SuggestedAction: "Specify --workdir explicitly to point at a writable location.");
+            SuggestedAction: "Specify --workdir explicitly to point at a writable location."
+        );
     }
+
+    public Result CheckForPathConflicts(
+        WorkingRoot workingRoot,
+        IEnumerable<TargetAppLocation> locations
+    )
+    {
+        var workingRootFull = NormalizeForComparison(workingRoot.Path);
+
+        foreach (var location in locations)
+        {
+            foreach (var candidate in new[] { location.InstallOrConfigDir, location.MetadataDir })
+            {
+                if (candidate is null)
+                    continue;
+
+                var candidateFull = NormalizeForComparison(candidate);
+
+                if (
+                    IsSameOrNested(workingRootFull, candidateFull)
+                    || IsSameOrNested(candidateFull, workingRootFull)
+                )
+                {
+                    return new MdmaError(
+                        MdmaErrorCode.WorkingDirectoryPathConflict,
+                        $"The working directory conflicts with {location.App}'s own directory.",
+                        Details: $"Working root: '{workingRoot.Path}', conflicting path: '{candidate}'.",
+                        SuggestedAction: "Choose a working directory that is not nested inside, or a parent of, any target application's own directory."
+                    );
+                }
+            }
+        }
+
+        return Result.Ok();
+    }
+
+    /// <summary>True if `path` is equal to, or a subdirectory anywhere under, `potentialAncestor`.
+    /// Both inputs must already be normalized via NormalizeForComparison.</summary>
+    private static bool IsSameOrNested(string path, string potentialAncestor)
+    {
+        if (string.Equals(path, potentialAncestor, StringComparison.OrdinalIgnoreCase))
+            return true;
+        return path.StartsWith(
+            potentialAncestor + Path.DirectorySeparatorChar,
+            StringComparison.OrdinalIgnoreCase
+        );
+    }
+
+    private static string NormalizeForComparison(string path) =>
+        Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
     private static Result EnsureDirectoryExists(string path)
     {
@@ -80,7 +146,8 @@ public sealed class WorkingDirectoryProvider : IWorkingDirectoryProvider
                 MdmaErrorCode.WorkingDirectoryUnwritable,
                 "Could not create the working directory.",
                 Details: path,
-                Inner: ex);
+                Inner: ex
+            );
         }
     }
 
@@ -101,7 +168,8 @@ public sealed class WorkingDirectoryProvider : IWorkingDirectoryProvider
                 MdmaErrorCode.WorkingDirectoryUnwritable,
                 "Write probe failed for this directory.",
                 Details: path,
-                Inner: ex);
+                Inner: ex
+            );
         }
     }
 }

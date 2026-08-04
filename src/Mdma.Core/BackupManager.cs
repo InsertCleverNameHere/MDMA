@@ -122,10 +122,11 @@ public sealed class BackupManager : IBackupManager
         var dbPath = Path.Combine(location.MetadataDir, "neatdb.db");
         if (!File.Exists(dbPath))
         {
-            return new MdmaError(
-                MdmaErrorCode.BackupFailed,
-                "neatdb.db was not found — nothing to back up.",
-                Details: dbPath);
+            // No neatdb.db at all -- this is a genuinely fresh NDM install with
+            // nothing to protect yet, not an error. A no-op backup (empty
+            // manifest) is correct: there is nothing to restore because there
+            // was nothing there before this operation.
+            return Result<IReadOnlyList<BackupManifestEntry>>.Ok(Array.Empty<BackupManifestEntry>());
         }
 
         var entries = new List<BackupManifestEntry>();
@@ -166,13 +167,25 @@ public sealed class BackupManager : IBackupManager
                 Details: "TargetAppLocation.InstallOrConfigDir was null.");
         }
 
-        var candidates = Directory.GetFiles(location.InstallOrConfigDir, "downloadList*.zip");
-        if (candidates.Length == 0)
+        string[] candidates;
+        try
+        {
+            candidates = Directory.GetFiles(location.InstallOrConfigDir, "downloadList*.zip");
+        }
+        catch (Exception ex)
         {
             return new MdmaError(
                 MdmaErrorCode.BackupFailed,
-                "No downloadList*.zip file was found — nothing to back up.",
-                Details: location.InstallOrConfigDir);
+                "Could not enumerate downloadList*.zip files.",
+                Details: location.InstallOrConfigDir,
+                Inner: ex);
+        }
+
+        if (candidates.Length == 0)
+        {
+            // No downloadList*.zip at all -- fresh JD2 install with nothing to
+            // protect yet. No-op backup is correct, same reasoning as NDM above.
+            return Result<IReadOnlyList<BackupManifestEntry>>.Ok(Array.Empty<BackupManifestEntry>());
         }
 
         var newestZip = Jd2Locator.PickNewest(candidates);
