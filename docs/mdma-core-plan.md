@@ -209,47 +209,47 @@ Split into sub-phases (this phase was originally one large block — divided per
 
 ### 5.1 Path-conflict check (deferred from Phase 1)
 
-- [ ] Add the check to `WorkingDirectoryProvider.Resolve` (or a variant called with known `TargetAppLocation`s): reject a working root nested inside a source or destination app's own directory (`InstallOrConfigDir`/`MetadataDir`). Returns `WorkingDirectoryPathConflict` (error code already exists in `MdmaErrorCode`, unused until now).
-- [ ] Decide exact call shape: does `Resolve` gain an optional `IEnumerable<TargetAppLocation>` parameter, or is this a separate method called by `ConversionService` after both locations are known? Lean toward the latter — `WorkingDirectoryProvider` shouldn't need to know about discovery types just for this one check.
+- [x] Add the check to `WorkingDirectoryProvider.Resolve` (or a variant called with known `TargetAppLocation`s): reject a working root nested inside a source or destination app's own directory (`InstallOrConfigDir`/`MetadataDir`). Returns `WorkingDirectoryPathConflict` (error code already exists in `MdmaErrorCode`, unused until now).
+- [x] Decide exact call shape: does `Resolve` gain an optional `IEnumerable<TargetAppLocation>` parameter, or is this a separate method called by `ConversionService` after both locations are known? Lean toward the latter — `WorkingDirectoryProvider` shouldn't need to know about discovery types just for this one check.
 
 **Tests:** working root nested inside source location's temp dir → rejected; nested inside destination's metadata dir → rejected; sibling (not nested) directory → allowed; no locations provided → behaves exactly as before (backward compatible).
 
 ### 5.2 `ITempCleanupService` (new interface + implementation)
 
-- [ ] New interface: sweeps `<workingRoot>\.mdma-tmp\` for orphaned `.mdma`/`.mdma.partial`/extraction folders left by a crashed prior run. Returns what it found/removed so CLI/GUI can report it.
-- [ ] Decide exact contract shape (e.g. `Result<IReadOnlyList<string>> SweepOrphans(WorkingRoot workingRoot)`), matching the `Result`-based pattern used everywhere else in Core.
-- [ ] Best-effort by nature — a file that can't be deleted (locked, in use) is skipped and reported, not a hard failure of the sweep.
+- [x] New interface: sweeps `<workingRoot>\.mdma-tmp\` for orphaned `.mdma`/`.mdma.partial`/extraction folders left by a crashed prior run. Returns what it found/removed so CLI/GUI can report it.
+- [x] Decide exact contract shape (e.g. `Result<IReadOnlyList<string>> SweepOrphans(WorkingRoot workingRoot)`), matching the `Result`-based pattern used everywhere else in Core.
+- [x] Best-effort by nature — a file that can't be deleted (locked, in use) is skipped and reported, not a hard failure of the sweep.
 
 **Tests:** sweep removes orphaned temp files/folders and reports them; a locked/undeletable file is skipped without failing the whole sweep; empty `.mdma-tmp\` (or missing entirely) returns cleanly with nothing to report.
 
 ### 5.3 `ConversionService.ExportToFile`
 
-- [ ] Order: process guard (source) → space check (working root, using the task's `DownloadedBytes` as the required size) → call the source's `IMdmaExporter` → return the written `.mdma` path.
-- [ ] No backup needed here — export never mutates the source app's own state (`NdmExporter`/`Jd2Exporter` are read-only against NDM/JD2's files).
-- [ ] Progress reporting threaded through via `IProgress<OperationProgress>`.
+- [x] Order: process guard (source) → space check (working root, using the task's `DownloadedBytes` as the required size) → call the source's `IMdmaExporter` → return the written `.mdma` path.
+- [x] No backup needed here — export never mutates the source app's own state (`NdmExporter`/`Jd2Exporter` are read-only against NDM/JD2's files).
+- [x] Progress reporting threaded through via `IProgress<OperationProgress>`.
 
 **Tests:** full order verified via mock/spy sequence; process-guard failure aborts before space check or export; insufficient space aborts before export is attempted; successful export returns the correct path.
 
 ### 5.4 `ConversionService.ImportFromFile`
 
-- [ ] Order: process guard (destination) → space check (destination's `DownloadDirectory`/`InstallOrConfigDir`, using the `.mdma` manifest's `TotalBytes` or summed `DownloadedBytes` as required size) → backup (destination, **Critical** — abort before any write if this fails) → `MdmaLoader.Load` → destination's `IDownloadListInjector.Inject`.
-- [ ] Progress reporting threaded through.
+- [x] Order: process guard (destination) → space check (destination's `DownloadDirectory`/`InstallOrConfigDir`, using the `.mdma` manifest's `TotalBytes` or summed `DownloadedBytes` as required size) → backup (destination, **Critical** — abort before any write if this fails) → `MdmaLoader.Load` → destination's `IDownloadListInjector.Inject`.
+- [x] Progress reporting threaded through.
 
 **Tests:** full order verified via mock/spy sequence; backup failure aborts before `MdmaLoader.Load` or injection ever run; process-guard failure aborts before backup is attempted; insufficient space aborts before backup.
 
 ### 5.5 `ConversionService.ConvertSameMachine`
 
-- [ ] Order: process guard (source **and** destination) → space checks (both sides) → backup (destination, Critical) → `ExportToFile` against a temp path under `<workingRoot>\.mdma-tmp\<guid>.mdma` → `ImportFromFile` against that temp path → best-effort delete of the temp `.mdma` (failure here is logged, does **not** fail the overall `Result`).
-- [ ] Must literally call the `ExportToFile`/`ImportFromFile` methods just built in 5.3/5.4 — no parallel/duplicated logic, per the standing "always round-trip through a real `.mdma`, even same-machine" design decision.
-- [ ] Enforces `StepCriticality` consistently: Critical failures abort immediately without attempting later steps; the cleanup step is explicitly BestEffort.
+- [x] Order: process guard (source **and** destination) → space checks (both sides) → backup (destination, Critical) → `ExportToFile` against a temp path under `<workingRoot>\.mdma-tmp\<guid>.mdma` → `ImportFromFile` against that temp path → best-effort delete of the temp `.mdma` (failure here is logged, does **not** fail the overall `Result`).
+- [x] Must literally call the `ExportToFile`/`ImportFromFile` methods just built in 5.3/5.4 — no parallel/duplicated logic, per the standing "always round-trip through a real `.mdma`, even same-machine" design decision.
+- [x] Enforces `StepCriticality` consistently: Critical failures abort immediately without attempting later steps; the cleanup step is explicitly BestEffort.
 
 **Tests:** full order verified via mock/spy sequence; cleanup failure after an otherwise-successful conversion still returns `Result.Ok` (this is the concrete test for the Critical vs. BestEffort distinction promised all the way back in architecture.md §8); backup failure aborts before export is attempted; confirms `ExportToFile`/`ImportFromFile` are the actual methods invoked (not reimplemented logic) — e.g. via a spy/count assertion.
 
 ### 5.6 True end-to-end round-trip tests (the coverage gap flagged at the end of Phase 4)
 
-- [ ] `NdmExporter` → `.mdma` → `Jd2Injector`, using `ConversionService.ConvertSameMachine` (or the two steps manually chained), asserting the resulting JD2 state (zip entries, reconstructed `.part` file bytes) matches the original NDM task.
-- [ ] `Jd2Exporter` → `.mdma` → `NdmInjector`, same idea in reverse.
-- [ ] At least one partial-download (not fully-completed) task in each direction, since that's the common real-world case per the plan's original Phase 4 test checklist.
+- [x] `NdmExporter` → `.mdma` → `Jd2Injector`, using `ConversionService.ConvertSameMachine` (or the two steps manually chained), asserting the resulting JD2 state (zip entries, reconstructed `.part` file bytes) matches the original NDM task.
+- [x] `Jd2Exporter` → `.mdma` → `NdmInjector`, same idea in reverse.
+- [x] At least one partial-download (not fully-completed) task in each direction, since that's the common real-world case per the plan's original Phase 4 test checklist.
 
 **Tests:** the above, using real fixture-built NDM/JD2 environments on both the source and destination side (two separate fixture roots standing in for "two machines" conceptually, even though same-machine mechanically) — byte-for-byte verification of the final injected state against the original source bytes.
 
@@ -257,15 +257,23 @@ Split into sub-phases (this phase was originally one large block — divided per
 
 ## Phase 6 — Logging
 
-- [ ] `ILogger`-style seam (or adopt `Microsoft.Extensions.Logging` — decide) writing structured entries to `<workingRoot>\logs\`, per your instruction that logs live next to the exe / in the portable working root, never AppData, mirroring the working-directory fallback rule if the primary location isn't writable.
-- [ ] Every Critical step logs start/success/failure; BestEffort step failures logged at a distinguishable level (warning, not error) since they don't fail the operation.
-- [ ] Log format decision: structured (JSON lines) vs. plain text — recommend JSON lines for future tooling/debugging, human-readable enough on its own.
+- [x] `ILogger`-style seam (or adopt `Microsoft.Extensions.Logging` — decide) writing structured entries to `<workingRoot>\logs\`, per your instruction that logs live next to the exe / in the portable working root, never AppData, mirroring the working-directory fallback rule if the primary location isn't writable.
+- [x] Every Critical step logs start/success/failure; BestEffort step failures logged at a distinguishable level (warning, not error) since they don't fail the operation.
+- [x] Log format decision: structured (JSON lines) vs. plain text — recommend JSON lines for future tooling/debugging, human-readable enough on its own.
 
 **Tests:**
 
-- [ ] Log file created in the resolved working root, not AppData, under normal conditions.
-- [ ] Falls back consistently with `IWorkingDirectoryProvider`'s own fallback behavior when the working root logs subdirectory isn't writable.
-- [ ] Critical vs. BestEffort steps produce distinguishable log levels (spot-check a handful, not exhaustive).
+- [x] Log file created in the resolved working root, not AppData, under normal conditions.
+- [x] Falls back consistently with `IWorkingDirectoryProvider`'s own fallback behavior when the working root logs subdirectory isn't writable.
+- [x] Critical vs. BestEffort steps produce distinguishable log levels (spot-check a handful, not exhaustive).
+
+## Mdma.Cli — Command-Line Interface — STATUS: COMPLETE
+
+- [x] Phase 1: CLI Infrastructure, Argument Parser (`CliParser`), Exit Codes (`0`–`6`, `99`), Trim-Safe JSON Source Generation (`CliJsonContext`), Production OS Seams (`RealSeams.cs`), Command Router & Entry Point (`Program.cs`).
+- [x] Phase 2: Discovery Commands (`scan` task table / JSON output, `clean` orphan sweep).
+- [x] Phase 3: Conversion Commands (`export` with default current directory output, `import`, `convert`, live progress reporter `ConsoleProgressReporter`).
+- [x] Phase 4: Safety Commands (`backups` snapshot table, `revert` snapshot restore).
+- [x] Phase 5: End-to-End CLI Tests (`EndToEndCliTests.cs`) & `.NET 10` Single-File Trimmed Publish (`mdma.exe`).
 
 ---
 
