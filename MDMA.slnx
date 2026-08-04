@@ -5,6 +5,7 @@
     <Project Path="src/Mdma.Gui/Mdma.Gui.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Mdma.Cli.Tests/Mdma.Cli.Tests.csproj" />
     <Project Path="tests/Mdma.Core.Tests/Mdma.Core.Tests.csproj" />
   </Folder>
 </Solution>

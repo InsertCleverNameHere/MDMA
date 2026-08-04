@@ -23,8 +23,23 @@ public class Jd2ExporterTests
             Directory.Delete(_testDir, recursive: true);
     }
 
-    private static DownloadTaskSummary MakeSummary(string nativeId, string filename, string url, long total, long downloaded) =>
-        new(nativeId, TargetApp.JD2, filename, url, total, downloaded, $"Paused ( {(int)(downloaded * 100 / total)}% )", true);
+    private static DownloadTaskSummary MakeSummary(
+        string nativeId,
+        string filename,
+        string url,
+        long total,
+        long downloaded
+    ) =>
+        new(
+            nativeId,
+            TargetApp.JD2,
+            filename,
+            url,
+            total,
+            downloaded,
+            $"Paused ( {(int)(downloaded * 100 / total)}% )",
+            true
+        );
 
     [Test]
     public void Export_SingleChunk_Produces_Valid_Mdma_With_Correct_Bytes()
@@ -40,7 +55,13 @@ public class Jd2ExporterTests
             .WithLink("99", "00", "f.bin", "https://example.com/f.bin", 10, 10, 10); // 1 chunk, fully downloaded
         fixture.Build();
 
-        var location = new TargetAppLocation(TargetApp.JD2, fixture.CfgDirectory, MetadataDir: null, DownloadDirectory: null, WasAutoDetected: true);
+        var location = new TargetAppLocation(
+            TargetApp.JD2,
+            fixture.CfgDirectory,
+            MetadataDir: null,
+            DownloadDirectory: null,
+            WasAutoDetected: true
+        );
         var task = MakeSummary("99_00", "f.bin", "https://example.com/f.bin", 10, 10);
 
         var exporter = new Jd2Exporter();
@@ -70,7 +91,13 @@ public class Jd2ExporterTests
             .WithLink("99", "00", "f.bin", "https://example.com/f.bin", 20, 20, 10, 20); // chunkProgress: [10, 20] absolute offsets
         fixture.Build();
 
-        var location = new TargetAppLocation(TargetApp.JD2, fixture.CfgDirectory, MetadataDir: null, DownloadDirectory: null, WasAutoDetected: true);
+        var location = new TargetAppLocation(
+            TargetApp.JD2,
+            fixture.CfgDirectory,
+            MetadataDir: null,
+            DownloadDirectory: null,
+            WasAutoDetected: true
+        );
         var task = MakeSummary("99_00", "f.bin", "https://example.com/f.bin", 20, 20);
 
         var exporter = new Jd2Exporter();
@@ -101,7 +128,13 @@ public class Jd2ExporterTests
             .WithLink("99", "00", "f.bin", "https://example.com/f.bin", 20, 15, 10, 15);
         fixture.Build();
 
-        var location = new TargetAppLocation(TargetApp.JD2, fixture.CfgDirectory, MetadataDir: null, DownloadDirectory: null, WasAutoDetected: true);
+        var location = new TargetAppLocation(
+            TargetApp.JD2,
+            fixture.CfgDirectory,
+            MetadataDir: null,
+            DownloadDirectory: null,
+            WasAutoDetected: true
+        );
         var task = MakeSummary("99_00", "f.bin", "https://example.com/f.bin", 20, 15);
 
         var exporter = new Jd2Exporter();
@@ -129,7 +162,13 @@ public class Jd2ExporterTests
             .WithLink("99", "00", "f.bin", "https://example.com/f.bin", 10, 10, 10);
         fixture.Build();
 
-        var location = new TargetAppLocation(TargetApp.JD2, fixture.CfgDirectory, MetadataDir: null, DownloadDirectory: null, WasAutoDetected: true);
+        var location = new TargetAppLocation(
+            TargetApp.JD2,
+            fixture.CfgDirectory,
+            MetadataDir: null,
+            DownloadDirectory: null,
+            WasAutoDetected: true
+        );
         var task = MakeSummary("99_00", "f.bin", "https://example.com/f.bin", 10, 10);
 
         var exporter = new Jd2Exporter();
@@ -147,24 +186,35 @@ public class Jd2ExporterTests
         var fileBytes = new byte[5];
         File.WriteAllBytes(Path.Combine(downloadFolder, "f.bin.part"), fileBytes);
 
-        // Package's downloadFolder is NOT set via WithPackageDownloadFolder, so
-        // it falls back to the fixture's placeholder "D:\Downloads", which
-        // won't exist on the test machine. location.DownloadDirectory (the
-        // app-level fallback) IS a real, valid folder -- but per the exporter's
-        // documented priority, the (non-existent) package-level folder should
-        // still be tried first, causing this export to fail.
+        var nonExistentPackageFolder = Path.Combine(_testDir, "non_existent_package_folder");
+
         var fixture = new Jd2FixtureBuilder(_testDir)
+            .WithPackageDownloadFolder("99", nonExistentPackageFolder)
             .WithLink("99", "00", "f.bin", "https://example.com/f.bin", 5, 5, 5);
         fixture.Build();
 
-        var location = new TargetAppLocation(TargetApp.JD2, fixture.CfgDirectory, MetadataDir: null, DownloadDirectory: downloadFolder, WasAutoDetected: true);
+        var location = new TargetAppLocation(
+            TargetApp.JD2,
+            fixture.CfgDirectory,
+            MetadataDir: null,
+            DownloadDirectory: downloadFolder,
+            WasAutoDetected: true
+        );
         var task = MakeSummary("99_00", "f.bin", "https://example.com/f.bin", 5, 5);
 
         var exporter = new Jd2Exporter();
-        var result = exporter.Export(task, location, _workingRoot, Path.Combine(_testDir, "out.mdma"));
+        var result = exporter.Export(
+            task,
+            location,
+            _workingRoot,
+            Path.Combine(_testDir, "out.mdma")
+        );
 
-        Assert.That(result.IsSuccess, Is.False,
-            "package-level downloadFolder should take priority over the app-level fallback when present, even if it doesn't resolve to a real path in this test");
+        Assert.That(
+            result.IsSuccess,
+            Is.False,
+            "package-level downloadFolder should take priority over the app-level fallback when present, even if it doesn't resolve to a real path in this test"
+        );
     }
 
     [Test]
@@ -181,19 +231,37 @@ public class Jd2ExporterTests
         var cfgDir = Path.Combine(_testDir, "cfg");
         Directory.CreateDirectory(cfgDir);
         var zipPath = Path.Combine(cfgDir, "downloadList1.zip");
-        using (var zip = System.IO.Compression.ZipFile.Open(zipPath, System.IO.Compression.ZipArchiveMode.Create))
+        using (
+            var zip = System.IO.Compression.ZipFile.Open(
+                zipPath,
+                System.IO.Compression.ZipArchiveMode.Create
+            )
+        )
         {
             var linkEntry = zip.CreateEntry("99_00");
             using var w = new StreamWriter(linkEntry.Open());
-            w.Write("""{"name":"f.bin","url":"https://example.com/f.bin","size":5,"current":5,"chunkProgress":[5],"properties":{"CHUNKS":1}}""");
+            w.Write(
+                """{"name":"f.bin","url":"https://example.com/f.bin","size":5,"current":5,"chunkProgress":[5],"properties":{"CHUNKS":1}}"""
+            );
             // deliberately no "99" package entry
         }
 
-        var location = new TargetAppLocation(TargetApp.JD2, cfgDir, MetadataDir: null, DownloadDirectory: downloadFolder, WasAutoDetected: true);
+        var location = new TargetAppLocation(
+            TargetApp.JD2,
+            cfgDir,
+            MetadataDir: null,
+            DownloadDirectory: downloadFolder,
+            WasAutoDetected: true
+        );
         var task = MakeSummary("99_00", "f.bin", "https://example.com/f.bin", 5, 5);
 
         var exporter = new Jd2Exporter();
-        var result = exporter.Export(task, location, _workingRoot, Path.Combine(_testDir, "out.mdma"));
+        var result = exporter.Export(
+            task,
+            location,
+            _workingRoot,
+            Path.Combine(_testDir, "out.mdma")
+        );
 
         Assert.That(result.IsSuccess, Is.True);
     }
@@ -201,11 +269,22 @@ public class Jd2ExporterTests
     [Test]
     public void Export_Fails_Cleanly_When_InstallOrConfigDir_Missing()
     {
-        var location = new TargetAppLocation(TargetApp.JD2, InstallOrConfigDir: null, MetadataDir: null, DownloadDirectory: null, WasAutoDetected: false);
+        var location = new TargetAppLocation(
+            TargetApp.JD2,
+            InstallOrConfigDir: null,
+            MetadataDir: null,
+            DownloadDirectory: null,
+            WasAutoDetected: false
+        );
         var task = MakeSummary("99_00", "f.bin", "https://example.com/f.bin", 5, 5);
 
         var exporter = new Jd2Exporter();
-        var result = exporter.Export(task, location, _workingRoot, Path.Combine(_testDir, "out.mdma"));
+        var result = exporter.Export(
+            task,
+            location,
+            _workingRoot,
+            Path.Combine(_testDir, "out.mdma")
+        );
 
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.Error!.Code, Is.EqualTo(MdmaErrorCode.ExportFailed));
@@ -214,11 +293,22 @@ public class Jd2ExporterTests
     [Test]
     public void Export_Fails_Cleanly_When_NativeId_Format_Invalid()
     {
-        var location = new TargetAppLocation(TargetApp.JD2, _testDir, MetadataDir: null, DownloadDirectory: null, WasAutoDetected: false);
+        var location = new TargetAppLocation(
+            TargetApp.JD2,
+            _testDir,
+            MetadataDir: null,
+            DownloadDirectory: null,
+            WasAutoDetected: false
+        );
         var task = MakeSummary("not-a-valid-native-id", "f.bin", "https://example.com/f.bin", 5, 5);
 
         var exporter = new Jd2Exporter();
-        var result = exporter.Export(task, location, _workingRoot, Path.Combine(_testDir, "out.mdma"));
+        var result = exporter.Export(
+            task,
+            location,
+            _workingRoot,
+            Path.Combine(_testDir, "out.mdma")
+        );
 
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.Error!.Code, Is.EqualTo(MdmaErrorCode.ExportFailed));
@@ -236,11 +326,22 @@ public class Jd2ExporterTests
             .WithLink("99", "00", "f.bin", "https://example.com/f.bin", 10, 5, 5);
         fixture.Build();
 
-        var location = new TargetAppLocation(TargetApp.JD2, fixture.CfgDirectory, MetadataDir: null, DownloadDirectory: null, WasAutoDetected: true);
+        var location = new TargetAppLocation(
+            TargetApp.JD2,
+            fixture.CfgDirectory,
+            MetadataDir: null,
+            DownloadDirectory: null,
+            WasAutoDetected: true
+        );
         var task = MakeSummary("99_00", "f.bin", "https://example.com/f.bin", 10, 5);
 
         var exporter = new Jd2Exporter();
-        var result = exporter.Export(task, location, _workingRoot, Path.Combine(_testDir, "out.mdma"));
+        var result = exporter.Export(
+            task,
+            location,
+            _workingRoot,
+            Path.Combine(_testDir, "out.mdma")
+        );
 
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.Error!.Code, Is.EqualTo(MdmaErrorCode.ExportFailed));
@@ -249,15 +350,33 @@ public class Jd2ExporterTests
     [Test]
     public void Export_Fails_Cleanly_When_Link_Entry_Not_Found()
     {
-        var fixture = new Jd2FixtureBuilder(_testDir)
-            .WithLink("99", "00", "f.bin", "https://example.com/f.bin", 10, 5, 5);
+        var fixture = new Jd2FixtureBuilder(_testDir).WithLink(
+            "99",
+            "00",
+            "f.bin",
+            "https://example.com/f.bin",
+            10,
+            5,
+            5
+        );
         fixture.Build();
 
-        var location = new TargetAppLocation(TargetApp.JD2, fixture.CfgDirectory, MetadataDir: null, DownloadDirectory: null, WasAutoDetected: true);
+        var location = new TargetAppLocation(
+            TargetApp.JD2,
+            fixture.CfgDirectory,
+            MetadataDir: null,
+            DownloadDirectory: null,
+            WasAutoDetected: true
+        );
         var task = MakeSummary("99_99", "f.bin", "https://example.com/f.bin", 10, 5); // wrong link index
 
         var exporter = new Jd2Exporter();
-        var result = exporter.Export(task, location, _workingRoot, Path.Combine(_testDir, "out.mdma"));
+        var result = exporter.Export(
+            task,
+            location,
+            _workingRoot,
+            Path.Combine(_testDir, "out.mdma")
+        );
 
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.Error!.Code, Is.EqualTo(MdmaErrorCode.ExportFailed));
