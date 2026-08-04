@@ -5,7 +5,7 @@ namespace Mdma.Cli;
 
 public static class ConsoleFormatter
 {
-    public static void PrintError(MdmaError error, bool isJson)
+    public static void PrintError(MdmaError error, bool isJson, bool verbose = false)
     {
         if (isJson)
         {
@@ -28,6 +28,18 @@ public static class ConsoleFormatter
             if (!string.IsNullOrEmpty(error.Details))
             {
                 Console.Error.WriteLine($"        Details: {error.Details}");
+            }
+            if (error.Inner is not null)
+            {
+                Console.ForegroundColor = ConsoleColor.DarkGray;
+                Console.Error.WriteLine(
+                    $"        Exception: [{error.Inner.GetType().Name}] {error.Inner.Message}"
+                );
+                if (verbose && !string.IsNullOrEmpty(error.Inner.StackTrace))
+                {
+                    Console.Error.WriteLine($"        StackTrace:\n{error.Inner.StackTrace}");
+                }
+                Console.ResetColor();
             }
             if (!string.IsNullOrEmpty(error.SuggestedAction))
             {

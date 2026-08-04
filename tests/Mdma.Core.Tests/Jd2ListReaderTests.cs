@@ -23,13 +23,25 @@ public class Jd2ListReaderTests
     [Test]
     public void ScanTasks_Returns_Correct_Summary_For_Single_Link()
     {
-        var fixture = new Jd2FixtureBuilder(_testDir)
-            .WithLink("99", "00", "poc_test_file.bin", "https://speed.hetzner.de/100MB.bin",
-                10_485_760, 2_097_152, 2_097_152);
+        var fixture = new Jd2FixtureBuilder(_testDir).WithLink(
+            "99",
+            "00",
+            "poc_test_file.bin",
+            "https://speed.hetzner.de/100MB.bin",
+            10_485_760,
+            2_097_152,
+            2_097_152
+        );
         fixture.Build();
 
         var reader = new Jd2ListReader();
-        var location = new TargetAppLocation(TargetApp.JD2, fixture.CfgDirectory, MetadataDir: null, DownloadDirectory: null, WasAutoDetected: true);
+        var location = new TargetAppLocation(
+            TargetApp.JD2,
+            fixture.CfgDirectory,
+            MetadataDir: null,
+            DownloadDirectory: null,
+            WasAutoDetected: true
+        );
 
         var result = reader.ScanTasks(location);
 
@@ -55,29 +67,56 @@ public class Jd2ListReaderTests
         fixture.Build();
 
         var reader = new Jd2ListReader();
-        var location = new TargetAppLocation(TargetApp.JD2, fixture.CfgDirectory, MetadataDir: null, DownloadDirectory: null, WasAutoDetected: true);
+        var location = new TargetAppLocation(
+            TargetApp.JD2,
+            fixture.CfgDirectory,
+            MetadataDir: null,
+            DownloadDirectory: null,
+            WasAutoDetected: true
+        );
 
         var result = reader.ScanTasks(location);
 
         Assert.That(result.Value, Has.Count.EqualTo(3));
-        Assert.That(result.Value!.Select(t => t.NativeId), Is.EquivalentTo(new[] { "00_00", "00_01", "01_00" }));
+        Assert.That(
+            result.Value!.Select(t => t.NativeId),
+            Is.EquivalentTo(new[] { "00_00", "00_01", "01_00" })
+        );
     }
 
     [Test]
     public void ScanTasks_Picks_Newest_Zip_When_Stale_Duplicate_Present()
     {
-        var fixture = new Jd2FixtureBuilder(_testDir, counter: 5)
-            .WithLink("99", "00", "newest_file.bin", "https://example.com/newest.bin", 1000, 100);
+        var fixture = new Jd2FixtureBuilder(_testDir, counter: 5).WithLink(
+            "99",
+            "00",
+            "newest_file.bin",
+            "https://example.com/newest.bin",
+            1000,
+            100
+        );
         fixture.Build();
         fixture.BuildStaleDuplicate(1); // older, valid but distinguishable by filename below
 
         // Overwrite the stale one's link content so we can prove it's ignored.
-        var staleBuilder = new Jd2FixtureBuilder(_testDir, counter: 1)
-            .WithLink("99", "00", "stale_file.bin", "https://example.com/stale.bin", 1000, 999);
+        var staleBuilder = new Jd2FixtureBuilder(_testDir, counter: 1).WithLink(
+            "99",
+            "00",
+            "stale_file.bin",
+            "https://example.com/stale.bin",
+            1000,
+            999
+        );
         staleBuilder.Build();
 
         var reader = new Jd2ListReader();
-        var location = new TargetAppLocation(TargetApp.JD2, fixture.CfgDirectory, MetadataDir: null, DownloadDirectory: null, WasAutoDetected: true);
+        var location = new TargetAppLocation(
+            TargetApp.JD2,
+            fixture.CfgDirectory,
+            MetadataDir: null,
+            DownloadDirectory: null,
+            WasAutoDetected: true
+        );
 
         var result = reader.ScanTasks(location);
 
@@ -89,7 +128,13 @@ public class Jd2ListReaderTests
     public void ScanTasks_Fails_Cleanly_When_InstallOrConfigDir_Missing_On_Location()
     {
         var reader = new Jd2ListReader();
-        var location = new TargetAppLocation(TargetApp.JD2, InstallOrConfigDir: null, MetadataDir: null, DownloadDirectory: null, WasAutoDetected: true);
+        var location = new TargetAppLocation(
+            TargetApp.JD2,
+            InstallOrConfigDir: null,
+            MetadataDir: null,
+            DownloadDirectory: null,
+            WasAutoDetected: true
+        );
 
         var result = reader.ScanTasks(location);
 
@@ -104,7 +149,13 @@ public class Jd2ListReaderTests
         Directory.CreateDirectory(cfgDir);
 
         var reader = new Jd2ListReader();
-        var location = new TargetAppLocation(TargetApp.JD2, cfgDir, MetadataDir: null, DownloadDirectory: null, WasAutoDetected: true);
+        var location = new TargetAppLocation(
+            TargetApp.JD2,
+            cfgDir,
+            MetadataDir: null,
+            DownloadDirectory: null,
+            WasAutoDetected: true
+        );
 
         var result = reader.ScanTasks(location);
 
@@ -119,11 +170,18 @@ public class Jd2ListReaderTests
         var cfgDir = Path.Combine(_testDir, "cfg");
         Directory.CreateDirectory(cfgDir);
         var zipPath = Path.Combine(cfgDir, "downloadList1.zip");
-        using (var zip = System.IO.Compression.ZipFile.Open(zipPath, System.IO.Compression.ZipArchiveMode.Create))
+        using (
+            var zip = System.IO.Compression.ZipFile.Open(
+                zipPath,
+                System.IO.Compression.ZipArchiveMode.Create
+            )
+        )
         {
             var pkgEntry = zip.CreateEntry("99");
             using (var w = new StreamWriter(pkgEntry.Open()))
-                w.Write("""{"uid":1,"name":"Empty Package","downloadFolder":"D:\\Downloads","created":1,"enabled":true}""");
+                w.Write(
+                    """{"uid":1,"name":"Empty Package","downloadFolder":"D:\\Downloads","created":1,"enabled":true}"""
+                );
 
             var infoEntry = zip.CreateEntry("extraInfo");
             using (var w = new StreamWriter(infoEntry.Open()))
@@ -131,7 +189,13 @@ public class Jd2ListReaderTests
         }
 
         var reader = new Jd2ListReader();
-        var location = new TargetAppLocation(TargetApp.JD2, cfgDir, MetadataDir: null, DownloadDirectory: null, WasAutoDetected: true);
+        var location = new TargetAppLocation(
+            TargetApp.JD2,
+            cfgDir,
+            MetadataDir: null,
+            DownloadDirectory: null,
+            WasAutoDetected: true
+        );
 
         var result = reader.ScanTasks(location);
 
@@ -142,12 +206,24 @@ public class Jd2ListReaderTests
     [Test]
     public void ScanTasks_Handles_Fully_Downloaded_Task_As_100_Percent()
     {
-        var fixture = new Jd2FixtureBuilder(_testDir)
-            .WithLink("99", "00", "complete.bin", "https://example.com/complete.bin", 5000, 5000);
+        var fixture = new Jd2FixtureBuilder(_testDir).WithLink(
+            "99",
+            "00",
+            "complete.bin",
+            "https://example.com/complete.bin",
+            5000,
+            5000
+        );
         fixture.Build();
 
         var reader = new Jd2ListReader();
-        var location = new TargetAppLocation(TargetApp.JD2, fixture.CfgDirectory, MetadataDir: null, DownloadDirectory: null, WasAutoDetected: true);
+        var location = new TargetAppLocation(
+            TargetApp.JD2,
+            fixture.CfgDirectory,
+            MetadataDir: null,
+            DownloadDirectory: null,
+            WasAutoDetected: true
+        );
 
         var result = reader.ScanTasks(location);
 
@@ -160,18 +236,67 @@ public class Jd2ListReaderTests
         var cfgDir = Path.Combine(_testDir, "cfg");
         Directory.CreateDirectory(cfgDir);
         var zipPath = Path.Combine(cfgDir, "downloadList1.zip");
-        using (var zip = System.IO.Compression.ZipFile.Open(zipPath, System.IO.Compression.ZipArchiveMode.Create))
+        using (
+            var zip = System.IO.Compression.ZipFile.Open(
+                zipPath,
+                System.IO.Compression.ZipArchiveMode.Create
+            )
+        )
         {
             var linkEntry = zip.CreateEntry("99_00");
             using var w = new StreamWriter(linkEntry.Open());
-            w.Write("""{"name":"f.bin","url":"https://example.com/f.bin","size":100,"current":50}"""); // no "properties" at all
+            w.Write(
+                """{"name":"f.bin","url":"https://example.com/f.bin","size":100,"current":50}"""
+            ); // no "properties" at all
         }
 
         var reader = new Jd2ListReader();
-        var location = new TargetAppLocation(TargetApp.JD2, cfgDir, MetadataDir: null, DownloadDirectory: null, WasAutoDetected: true);
+        var location = new TargetAppLocation(
+            TargetApp.JD2,
+            cfgDir,
+            MetadataDir: null,
+            DownloadDirectory: null,
+            WasAutoDetected: true
+        );
 
         var result = reader.ScanTasks(location);
 
         Assert.That(result.Value![0].Resumable, Is.False);
+    }
+
+    [Test]
+    public void ScanTasks_Handles_Link_With_Null_Properties_Field_Without_Throwing()
+    {
+        var cfgDir = Path.Combine(_testDir, "cfg");
+        Directory.CreateDirectory(cfgDir);
+        var zipPath = Path.Combine(cfgDir, "downloadList1.zip");
+        using (
+            var zip = System.IO.Compression.ZipFile.Open(
+                zipPath,
+                System.IO.Compression.ZipArchiveMode.Create
+            )
+        )
+        {
+            var linkEntry = zip.CreateEntry("99_00");
+            using var w = new StreamWriter(linkEntry.Open());
+            w.Write(
+                """{"name":"f.bin","url":"https://example.com/f.bin","size":100,"current":50,"properties":null}"""
+            );
+        }
+
+        var reader = new Jd2ListReader();
+        var location = new TargetAppLocation(
+            TargetApp.JD2,
+            cfgDir,
+            MetadataDir: null,
+            DownloadDirectory: null,
+            WasAutoDetected: true
+        );
+
+        var result = reader.ScanTasks(location);
+
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(result.Value![0].Filename, Is.EqualTo("f.bin"));
+        Assert.That(result.Value[0].Resumable, Is.False);
     }
 }

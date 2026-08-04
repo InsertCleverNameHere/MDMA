@@ -84,7 +84,10 @@ public sealed class BackupManager : IBackupManager
         try
         {
             var manifestPath = Path.Combine(backupDir, "manifest.json");
-            File.WriteAllText(manifestPath, JsonSerializer.Serialize(manifest));
+            File.WriteAllText(
+                manifestPath,
+                JsonSerializer.Serialize(manifest, CoreJsonContext.Default.BackupManifest)
+            );
         }
         catch (Exception ex)
         {
@@ -125,8 +128,9 @@ public sealed class BackupManager : IBackupManager
 
             try
             {
-                var manifest = JsonSerializer.Deserialize<BackupManifest>(
-                    File.ReadAllText(manifestPath)
+                var manifest = JsonSerializer.Deserialize(
+                    File.ReadAllText(manifestPath),
+                    CoreJsonContext.Default.BackupManifest
                 );
                 if (manifest is null)
                     continue;

@@ -28,7 +28,8 @@ public sealed partial class Jd2ListReader : IDownloadListReader
             return new MdmaError(
                 MdmaErrorCode.ScanFailed,
                 "No cfg\\ directory is known for this JD2 location.",
-                Details: "TargetAppLocation.InstallOrConfigDir was null.");
+                Details: "TargetAppLocation.InstallOrConfigDir was null."
+            );
         }
 
         var cfgDir = location.InstallOrConfigDir;
@@ -43,7 +44,8 @@ public sealed partial class Jd2ListReader : IDownloadListReader
                 MdmaErrorCode.ScanFailed,
                 "Could not enumerate downloadList*.zip files.",
                 Details: cfgDir,
-                Inner: ex);
+                Inner: ex
+            );
         }
 
         if (candidates.Length == 0)
@@ -51,7 +53,8 @@ public sealed partial class Jd2ListReader : IDownloadListReader
             return new MdmaError(
                 MdmaErrorCode.ScanFailed,
                 "No downloadList*.zip file was found.",
-                Details: cfgDir);
+                Details: cfgDir
+            );
         }
 
         var newestZip = Jd2Locator.PickNewest(candidates);
@@ -66,7 +69,8 @@ public sealed partial class Jd2ListReader : IDownloadListReader
                 MdmaErrorCode.ScanFailed,
                 "Failed to parse the JD2 task list archive.",
                 Details: newestZip,
-                Inner: ex);
+                Inner: ex
+            );
         }
     }
 
@@ -79,7 +83,8 @@ public sealed partial class Jd2ListReader : IDownloadListReader
         foreach (var entry in zip.Entries)
         {
             var linkMatch = LinkEntryPattern.Match(entry.Name);
-            if (!linkMatch.Success) continue; // skip package entries and "extraInfo"
+            if (!linkMatch.Success)
+                continue; // skip package entries and "extraInfo"
 
             var packageId = linkMatch.Groups[1].Value;
             var linkIndex = linkMatch.Groups[2].Value;
@@ -94,9 +99,13 @@ public sealed partial class Jd2ListReader : IDownloadListReader
             var current = GetInt64(root, "current") ?? 0;
 
             bool resumable = false;
-            if (root.TryGetProperty("properties", out var props) &&
-                props.TryGetProperty("PROPERTY_RESUMEABLE", out var resumeProp) &&
-                resumeProp.ValueKind is JsonValueKind.True or JsonValueKind.False)
+            if (
+                root.ValueKind == JsonValueKind.Object
+                && root.TryGetProperty("properties", out var props)
+                && props.ValueKind == JsonValueKind.Object
+                && props.TryGetProperty("PROPERTY_RESUMEABLE", out var resumeProp)
+                && resumeProp.ValueKind is JsonValueKind.True or JsonValueKind.False
+            )
             {
                 resumable = resumeProp.GetBoolean();
             }
@@ -104,27 +113,34 @@ public sealed partial class Jd2ListReader : IDownloadListReader
             int pct = size <= 0 ? 0 : (int)(current * 100 / size);
             var status = $"Paused ( {pct}% )"; // mirrors NDM's convention for consistent CLI/GUI display
 
-            links.Add(new DownloadTaskSummary(
-                NativeId: $"{packageId}_{linkIndex}",
-                Source: TargetApp.JD2,
-                Filename: filename,
-                Url: url,
-                TotalBytes: size,
-                DownloadedBytes: current,
-                StatusText: status,
-                Resumable: resumable));
+            links.Add(
+                new DownloadTaskSummary(
+                    NativeId: $"{packageId}_{linkIndex}",
+                    Source: TargetApp.JD2,
+                    Filename: filename,
+                    Url: url,
+                    TotalBytes: size,
+                    DownloadedBytes: current,
+                    StatusText: status,
+                    Resumable: resumable
+                )
+            );
         }
 
         return links;
     }
 
     private static string? GetString(JsonElement root, string propertyName) =>
-        root.TryGetProperty(propertyName, out var v) && v.ValueKind == JsonValueKind.String
+        root.ValueKind == JsonValueKind.Object
+        && root.TryGetProperty(propertyName, out var v)
+        && v.ValueKind == JsonValueKind.String
             ? v.GetString()
             : null;
 
     private static long? GetInt64(JsonElement root, string propertyName) =>
-        root.TryGetProperty(propertyName, out var v) && v.ValueKind == JsonValueKind.Number
+        root.ValueKind == JsonValueKind.Object
+        && root.TryGetProperty(propertyName, out var v)
+        && v.ValueKind == JsonValueKind.Number
             ? v.GetInt64()
             : null;
 

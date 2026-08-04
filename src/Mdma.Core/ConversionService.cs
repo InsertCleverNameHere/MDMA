@@ -282,7 +282,10 @@ public sealed class ConversionService : IConversionService
             }
 
             using var stream = entry.Open();
-            var manifest = System.Text.Json.JsonSerializer.Deserialize<MdmaManifestDto>(stream);
+            var manifest = System.Text.Json.JsonSerializer.Deserialize(
+                stream,
+                CoreJsonContext.Default.MdmaManifestDto
+            );
             if (manifest is null)
             {
                 return new MdmaError(

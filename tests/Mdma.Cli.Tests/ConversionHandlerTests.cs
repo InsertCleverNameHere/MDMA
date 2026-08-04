@@ -303,4 +303,101 @@ public class ConversionHandlersTests
 
         Assert.That(exitCode, Is.EqualTo(ExitCodes.Success));
     }
+
+    [Test]
+    public void Export_Without_OutPath_Defaults_To_CurrentDirectory_And_Task_Filename()
+    {
+        var fixture = new NdmFixtureBuilder(_testDir).WithTask(
+            521,
+            "default_out.bin",
+            "https://example.com/f.bin",
+            1000,
+            (0, 999, 500)
+        );
+        fixture.Build();
+
+        var fakeRegistry = new FakeRegistryAccessor()
+            .Seed(@"SOFTWARE\NeatDM", "TempDirectory", fixture.TempDirectory)
+            .Seed(@"SOFTWARE\NeatDM", "DownloadDirectory", fixture.DownloadDirectory);
+
+        // OutPath set to null
+        var args = new CliArgs(
+            "export",
+            _testDir,
+            false,
+            false,
+            false,
+            "ndm",
+            null,
+            null,
+            "521",
+            null,
+            null,
+            null,
+            null,
+            _testDir,
+            null
+        );
+
+        var exitCode = ExportHandler.Execute(args, fakeRegistry);
+
+        var expectedPath = Path.Combine(Environment.CurrentDirectory, "default_out.bin.mdma");
+
+        try
+        {
+            Assert.That(exitCode, Is.EqualTo(ExitCodes.Success));
+            Assert.That(File.Exists(expectedPath), Is.True);
+        }
+        finally
+        {
+            if (File.Exists(expectedPath))
+                File.Delete(expectedPath);
+        }
+    }
+
+    [Test]
+    public void Export_With_Directory_OutPath_Appends_Task_Filename()
+    {
+        var fixture = new NdmFixtureBuilder(_testDir).WithTask(
+            521,
+            "dir_out.bin",
+            "https://example.com/f.bin",
+            1000,
+            (0, 999, 500)
+        );
+        fixture.Build();
+
+        var fakeRegistry = new FakeRegistryAccessor()
+            .Seed(@"SOFTWARE\NeatDM", "TempDirectory", fixture.TempDirectory)
+            .Seed(@"SOFTWARE\NeatDM", "DownloadDirectory", fixture.DownloadDirectory);
+
+        var targetFolder = Path.Combine(_testDir, "out_folder");
+        Directory.CreateDirectory(targetFolder);
+
+        // OutPath set to an existing folder path
+        var args = new CliArgs(
+            "export",
+            _testDir,
+            false,
+            false,
+            false,
+            "ndm",
+            null,
+            null,
+            "521",
+            targetFolder,
+            null,
+            null,
+            null,
+            _testDir,
+            null
+        );
+
+        var exitCode = ExportHandler.Execute(args, fakeRegistry);
+
+        var expectedPath = Path.Combine(targetFolder, "dir_out.bin.mdma");
+
+        Assert.That(exitCode, Is.EqualTo(ExitCodes.Success));
+        Assert.That(File.Exists(expectedPath), Is.True);
+    }
 }

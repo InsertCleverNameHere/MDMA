@@ -381,4 +381,44 @@ public class Jd2ExporterTests
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.Error!.Code, Is.EqualTo(MdmaErrorCode.ExportFailed));
     }
+
+    [Test]
+    public void Export_Unstarted_Task_With_Zero_Downloaded_Bytes_Succeeds()
+    {
+        var downloadFolder = Path.Combine(_testDir, "downloads");
+        Directory.CreateDirectory(downloadFolder);
+        // No .part or completed file on disk
+
+        var fixture = new Jd2FixtureBuilder(_testDir)
+            .WithPackageDownloadFolder("99", downloadFolder)
+            .WithLink("99", "00", "unstarted.bin", "https://example.com/unstarted.bin", 10, 0, 0);
+        fixture.Build();
+
+        var location = new TargetAppLocation(
+            TargetApp.JD2,
+            fixture.CfgDirectory,
+            MetadataDir: null,
+            DownloadDirectory: null,
+            WasAutoDetected: true
+        );
+        var task = MakeSummary(
+            "99_00",
+            "unstarted.bin",
+            "https://example.com/unstarted.bin",
+            10,
+            0
+        );
+
+        var exporter = new Jd2Exporter();
+        var destPath = Path.Combine(_testDir, "unstarted.mdma");
+        var result = exporter.Export(task, location, _workingRoot, destPath);
+
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(File.Exists(destPath), Is.True);
+
+        var loadResult = new MdmaLoader().Load(destPath, _workingRoot);
+        Assert.That(loadResult.IsSuccess, Is.True);
+        Assert.That(loadResult.Value!.Manifest.TotalBytes, Is.EqualTo(10));
+        Assert.That(loadResult.Value.Manifest.Chunks[0].DownloadedBytes, Is.EqualTo(0));
+    }
 }

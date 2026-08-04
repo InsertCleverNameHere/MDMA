@@ -25,7 +25,8 @@ public sealed class MdmaPackageWriter
         IReadOnlyList<KeyValuePair<string, string>> headers,
         long createdEpochMillis,
         IReadOnlyList<MdmaChunkSource> chunks,
-        string destinationZipPath)
+        string destinationZipPath
+    )
     {
         foreach (var chunk in chunks)
         {
@@ -34,17 +35,26 @@ public sealed class MdmaPackageWriter
                 return new MdmaError(
                     MdmaErrorCode.Unknown,
                     "A chunk source file was not found while building the .mdma package.",
-                    Details: $"chunk {chunk.Index}: {chunk.FilePath}");
+                    Details: $"chunk {chunk.Index}: {chunk.FilePath}"
+                );
             }
         }
 
         var destinationDir = Path.GetDirectoryName(Path.GetFullPath(destinationZipPath));
         if (!string.IsNullOrEmpty(destinationDir))
         {
-            try { Directory.CreateDirectory(destinationDir); }
+            try
+            {
+                Directory.CreateDirectory(destinationDir);
+            }
             catch (Exception ex)
             {
-                return new MdmaError(MdmaErrorCode.Unknown, "Could not create destination directory.", Details: destinationDir, Inner: ex);
+                return new MdmaError(
+                    MdmaErrorCode.Unknown,
+                    "Could not create destination directory.",
+                    Details: destinationDir,
+                    Inner: ex
+                );
             }
         }
 
@@ -58,7 +68,10 @@ public sealed class MdmaPackageWriter
 
             foreach (var chunk in chunks.OrderBy(c => c.Index))
             {
-                var entry = zip.CreateEntry($"data/chunk_{chunk.Index}.bin", CompressionLevel.Optimal);
+                var entry = zip.CreateEntry(
+                    $"data/chunk_{chunk.Index}.bin",
+                    CompressionLevel.Optimal
+                );
                 using (var entryStream = entry.Open())
                 using (var sourceStream = File.OpenRead(chunk.FilePath))
                 {
@@ -68,13 +81,15 @@ public sealed class MdmaPackageWriter
                 var hash = MdmaChecksumHelper.ComputeFileHash(chunk.FilePath);
                 chunkHashes[chunk.Index.ToString()] = hash;
 
-                manifestChunks.Add(new MdmaChunkDto
-                {
-                    Index = chunk.Index,
-                    StartByte = chunk.StartByte,
-                    EndByte = chunk.EndByte,
-                    DownloadedBytes = new FileInfo(chunk.FilePath).Length,
-                });
+                manifestChunks.Add(
+                    new MdmaChunkDto
+                    {
+                        Index = chunk.Index,
+                        StartByte = chunk.StartByte,
+                        EndByte = chunk.EndByte,
+                        DownloadedBytes = new FileInfo(chunk.FilePath).Length,
+                    }
+                );
             }
 
             var manifest = new MdmaManifestDto
@@ -87,7 +102,9 @@ public sealed class MdmaPackageWriter
                     Filename = filename,
                     TotalSize = totalBytes,
                     MimeType = mimeType,
-                    Headers = headers.Select(h => new MdmaHeaderDto { Name = h.Key, Value = h.Value }).ToList(),
+                    Headers = headers
+                        .Select(h => new MdmaHeaderDto { Name = h.Key, Value = h.Value })
+                        .ToList(),
                     Created = createdEpochMillis,
                 },
                 Chunks = manifestChunks,
@@ -96,20 +113,28 @@ public sealed class MdmaPackageWriter
             var manifestEntry = zip.CreateEntry("manifest.json");
             using (var w = new StreamWriter(manifestEntry.Open()))
             {
-                w.Write(JsonSerializer.Serialize(manifest));
+                w.Write(
+                    JsonSerializer.Serialize(manifest, CoreJsonContext.Default.MdmaManifestDto)
+                );
             }
 
             var checksumDto = new MdmaChecksumDto
             {
                 ChunkHashes = chunkHashes,
                 ManifestHash = MdmaChecksumHelper.ComputeManifestHash(
-                    chunkHashes.Select(kv => new KeyValuePair<int, string>(int.Parse(kv.Key), kv.Value))),
+                    chunkHashes.Select(kv => new KeyValuePair<int, string>(
+                        int.Parse(kv.Key),
+                        kv.Value
+                    ))
+                ),
             };
 
             var checksumEntry = zip.CreateEntry("checksum.sha256");
             using (var w = new StreamWriter(checksumEntry.Open()))
             {
-                w.Write(JsonSerializer.Serialize(checksumDto));
+                w.Write(
+                    JsonSerializer.Serialize(checksumDto, CoreJsonContext.Default.MdmaChecksumDto)
+                );
             }
         }
         catch (Exception ex)
@@ -119,7 +144,8 @@ public sealed class MdmaPackageWriter
                 MdmaErrorCode.Unknown,
                 "Failed to write the .mdma package.",
                 Details: destinationZipPath,
-                Inner: ex);
+                Inner: ex
+            );
         }
 
         return Result<string>.Ok(destinationZipPath);
@@ -127,7 +153,13 @@ public sealed class MdmaPackageWriter
 
     private static void TryDeleteBestEffort(string path)
     {
-        try { if (File.Exists(path)) File.Delete(path); }
-        catch { /* best-effort cleanup of a failed write attempt */ }
+        try
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+        catch
+        { /* best-effort cleanup of a failed write attempt */
+        }
     }
 }

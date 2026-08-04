@@ -10,34 +10,12 @@ public static class ExportHandler
         IWorkingDirectoryProvider? providerOverride = null
     )
     {
-        if (string.IsNullOrWhiteSpace(args.App))
-        {
-            var err = new MdmaError(
-                MdmaErrorCode.ManualPathInvalid,
-                "Missing required flag: --app (ndm or jd2).",
-                SuggestedAction: "Specify --app ndm or --app jd2."
-            );
-            ConsoleFormatter.PrintError(err, args.Json);
-            return ExitCodes.TargetAppNotFoundOrPathInvalid;
-        }
-
         if (string.IsNullOrWhiteSpace(args.Id))
         {
             var err = new MdmaError(
                 MdmaErrorCode.ManualPathInvalid,
                 "Missing required flag: --id <task_id>.",
                 SuggestedAction: "Specify --id with the task ID to export."
-            );
-            ConsoleFormatter.PrintError(err, args.Json);
-            return ExitCodes.TargetAppNotFoundOrPathInvalid;
-        }
-
-        if (string.IsNullOrWhiteSpace(args.OutPath))
-        {
-            var err = new MdmaError(
-                MdmaErrorCode.ManualPathInvalid,
-                "Missing required flag: --out <path>.",
-                SuggestedAction: "Specify --out with the destination .mdma file path."
             );
             ConsoleFormatter.PrintError(err, args.Json);
             return ExitCodes.TargetAppNotFoundOrPathInvalid;
@@ -145,8 +123,25 @@ public static class ExportHandler
             logger: fileLogger
         );
 
+        string destinationMdmaPath;
+        var safeFileName = SanitizeFileName(task.Filename);
+        var defaultPackageName = $"{safeFileName}.mdma";
+
+        if (string.IsNullOrWhiteSpace(args.OutPath))
+        {
+            destinationMdmaPath = Path.Combine(Environment.CurrentDirectory, defaultPackageName);
+        }
+        else if (Directory.Exists(args.OutPath))
+        {
+            destinationMdmaPath = Path.Combine(args.OutPath, defaultPackageName);
+        }
+        else
+        {
+            destinationMdmaPath = Path.GetFullPath(args.OutPath);
+        }
+
         var reporter = new ConsoleProgressReporter(args.Json);
-        var exportResult = service.ExportToFile(task, location, args.OutPath, reporter);
+        var exportResult = service.ExportToFile(task, location, destinationMdmaPath, reporter);
         reporter.Complete();
 
         if (!exportResult.IsSuccess)
@@ -166,4 +161,11 @@ public static class ExportHandler
             "jd2" => TargetApp.JD2,
             _ => null,
         };
+
+    private static string SanitizeFileName(string fileName)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var chars = fileName.Select(c => invalid.Contains(c) ? '_' : c).ToArray();
+        return new string(chars);
+    }
 }

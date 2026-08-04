@@ -185,20 +185,25 @@ public sealed class Jd2Injector : IDownloadListInjector
 
         if (!hasExtraInfo)
         {
-            WriteJsonEntry(destZip, "extraInfo", new { version = 2 });
+            WriteJsonEntry(
+                destZip,
+                "extraInfo",
+                new Jd2ExtraInfoDto(2),
+                CoreJsonContext.Default.Jd2ExtraInfoDto
+            );
         }
 
         WriteJsonEntry(
             destZip,
             newPackageId,
-            new
-            {
-                uid = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                name = "MDMA Injected Downloads",
-                downloadFolder,
-                created = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                enabled = true,
-            }
+            new Jd2PackageEntryDto(
+                Uid: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                Name: "MDMA Injected Downloads",
+                DownloadFolder: downloadFolder,
+                Created: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                Enabled: true
+            ),
+            CoreJsonContext.Default.Jd2PackageEntryDto
         );
 
         long totalDownloaded = manifest.Chunks.Sum(c => c.DownloadedBytes);
@@ -221,33 +226,37 @@ public sealed class Jd2Injector : IDownloadListInjector
         WriteJsonEntry(
             destZip,
             $"{newPackageId}_{newLinkId}",
-            new
-            {
-                uid = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 1,
-                name = manifest.Filename,
-                url = manifest.Url,
-                host,
-                size = manifest.TotalBytes,
-                current = totalDownloaded,
-                chunkProgress,
-                availablestatus = "TRUE",
-                enabled = true,
-                created = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                properties = new
-                {
-                    CHUNKS = orderedChunks.Count,
-                    PROPERTY_RESUMEABLE = true,
-                    URL_CONTENT = manifest.Url,
-                },
-            }
+            new Jd2LinkEntryDto(
+                Uid: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 1,
+                Name: manifest.Filename,
+                Url: manifest.Url,
+                Host: host,
+                Size: manifest.TotalBytes,
+                Current: totalDownloaded,
+                ChunkProgress: chunkProgress,
+                Availablestatus: "TRUE",
+                Enabled: true,
+                Created: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                Properties: new Jd2LinkPropertiesDto(
+                    Chunks: orderedChunks.Count,
+                    PropertyResumeable: true,
+                    UrlContent: manifest.Url
+                )
+            ),
+            CoreJsonContext.Default.Jd2LinkEntryDto
         );
     }
 
-    private static void WriteJsonEntry(ZipArchive zip, string entryName, object content)
+    private static void WriteJsonEntry<T>(
+        ZipArchive zip,
+        string entryName,
+        T content,
+        System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> jsonTypeInfo
+    )
     {
         var entry = zip.CreateEntry(entryName);
         using var writer = new StreamWriter(entry.Open(), Encoding.UTF8);
-        writer.Write(JsonSerializer.Serialize(content));
+        writer.Write(JsonSerializer.Serialize(content, jsonTypeInfo));
     }
 
     private static int ExtractCounter(string zipPath)

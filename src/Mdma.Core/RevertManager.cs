@@ -47,7 +47,10 @@ public sealed class RevertManager : IRevertManager
         BackupManifest? manifest;
         try
         {
-            manifest = JsonSerializer.Deserialize<BackupManifest>(File.ReadAllText(manifestPath));
+            manifest = JsonSerializer.Deserialize(
+                File.ReadAllText(manifestPath),
+                CoreJsonContext.Default.BackupManifest
+            );
         }
         catch (Exception ex)
         {

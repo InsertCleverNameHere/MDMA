@@ -123,7 +123,9 @@ public sealed class FileLogger : IMdmaLogger
         string jsonLine;
         try
         {
-            jsonLine = JsonSerializer.Serialize(entry) + Environment.NewLine;
+            jsonLine =
+                JsonSerializer.Serialize(entry, CoreJsonContext.Default.LogEntry)
+                + Environment.NewLine;
         }
         catch
         {

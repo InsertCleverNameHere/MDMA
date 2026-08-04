@@ -22,7 +22,7 @@ public static class ScanHandler
             {
                 if (targetAppFilter == TargetApp.NDM)
                 {
-                    ConsoleFormatter.PrintError(ndmResult.Error!, args.Json);
+                    ConsoleFormatter.PrintError(ndmResult.Error!, args.Json, args.Verbose);
                     return ExitCodes.Map(ndmResult.Error!.Code);
                 }
             }
@@ -39,7 +39,7 @@ public static class ScanHandler
             {
                 if (targetAppFilter == TargetApp.JD2)
                 {
-                    ConsoleFormatter.PrintError(jd2Result.Error!, args.Json);
+                    ConsoleFormatter.PrintError(jd2Result.Error!, args.Json, args.Verbose);
                     return ExitCodes.Map(jd2Result.Error!.Code);
                 }
             }
