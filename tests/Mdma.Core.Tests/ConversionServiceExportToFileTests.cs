@@ -14,7 +14,10 @@ public class ConversionServiceExportToFileTests
     [SetUp]
     public void SetUp()
     {
-        _testDir = Path.Combine(Path.GetTempPath(), "mdma-conversionservice-test-" + Guid.NewGuid());
+        _testDir = Path.Combine(
+            Path.GetTempPath(),
+            "mdma-conversionservice-test-" + Guid.NewGuid()
+        );
         Directory.CreateDirectory(_testDir);
         _workingRoot = new WorkingRoot(_testDir, true, false);
 
@@ -31,17 +34,32 @@ public class ConversionServiceExportToFileTests
             Directory.Delete(_testDir, recursive: true);
     }
 
-    private ConversionService CreateService() => new(
-        _workingRoot,
-        new ProcessGuard(_processLister),
-        new SpaceChecker(_diskSpace),
-        backupManager: null!, // not used by ExportToFile
-        exporters: new Dictionary<TargetApp, IMdmaExporter> { [TargetApp.NDM] = _ndmExporter, [TargetApp.JD2] = _jd2Exporter },
-        injectors: null!, // not used by ExportToFile
-        mdmaLoader: null!); // not used by ExportToFile
+    private ConversionService CreateService() =>
+        new(
+            _workingRoot,
+            new ProcessGuard(_processLister),
+            new SpaceChecker(_diskSpace),
+            backupManager: null!, // not used by ExportToFile
+            exporters: new Dictionary<TargetApp, IMdmaExporter>
+            {
+                [TargetApp.NDM] = _ndmExporter,
+                [TargetApp.JD2] = _jd2Exporter,
+            },
+            injectors: null!, // not used by ExportToFile
+            mdmaLoader: null!
+        ); // not used by ExportToFile
 
     private static DownloadTaskSummary MakeTask(TargetApp source, long downloadedBytes = 100) =>
-        new("1", source, "f.bin", "https://example.com/f.bin", 1000, downloadedBytes, "Paused ( 10% )", true);
+        new(
+            "1",
+            source,
+            "f.bin",
+            "https://example.com/f.bin",
+            1000,
+            downloadedBytes,
+            "Paused ( 10% )",
+            true
+        );
 
     private static TargetAppLocation MakeLocation(TargetApp app) =>
         new(app, "/some/dir", "/some/meta", DownloadDirectory: null, WasAutoDetected: true);
@@ -52,7 +70,11 @@ public class ConversionServiceExportToFileTests
         var service = CreateService();
         var task = MakeTask(TargetApp.NDM);
 
-        var result = service.ExportToFile(task, MakeLocation(TargetApp.NDM), Path.Combine(_testDir, "out.mdma"));
+        var result = service.ExportToFile(
+            task,
+            MakeLocation(TargetApp.NDM),
+            Path.Combine(_testDir, "out.mdma")
+        );
 
         Assert.That(result.IsSuccess, Is.True);
         Assert.That(_ndmExporter.CallCount, Is.EqualTo(1));
@@ -78,11 +100,19 @@ public class ConversionServiceExportToFileTests
         var service = CreateService();
         var task = MakeTask(TargetApp.NDM);
 
-        var result = service.ExportToFile(task, MakeLocation(TargetApp.NDM), Path.Combine(_testDir, "out.mdma"));
+        var result = service.ExportToFile(
+            task,
+            MakeLocation(TargetApp.NDM),
+            Path.Combine(_testDir, "out.mdma")
+        );
 
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.Error!.Code, Is.EqualTo(MdmaErrorCode.TargetAppProcessRunning));
-        Assert.That(_ndmExporter.CallCount, Is.EqualTo(0), "exporter must not be called when process guard fails");
+        Assert.That(
+            _ndmExporter.CallCount,
+            Is.EqualTo(0),
+            "exporter must not be called when process guard fails"
+        );
     }
 
     [Test]
@@ -92,11 +122,19 @@ public class ConversionServiceExportToFileTests
         var service = CreateService();
         var task = MakeTask(TargetApp.NDM, downloadedBytes: 1_000_000);
 
-        var result = service.ExportToFile(task, MakeLocation(TargetApp.NDM), Path.Combine(_testDir, "out.mdma"));
+        var result = service.ExportToFile(
+            task,
+            MakeLocation(TargetApp.NDM),
+            Path.Combine(_testDir, "out.mdma")
+        );
 
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.Error!.Code, Is.EqualTo(MdmaErrorCode.InsufficientDiskSpaceSource));
-        Assert.That(_ndmExporter.CallCount, Is.EqualTo(0), "exporter must not be called when space check fails");
+        Assert.That(
+            _ndmExporter.CallCount,
+            Is.EqualTo(0),
+            "exporter must not be called when space check fails"
+        );
     }
 
     [Test]
@@ -110,7 +148,11 @@ public class ConversionServiceExportToFileTests
         var service = CreateService();
         var task = MakeTask(TargetApp.NDM, downloadedBytes: 1_000_000);
 
-        var result = service.ExportToFile(task, MakeLocation(TargetApp.NDM), Path.Combine(_testDir, "out.mdma"));
+        var result = service.ExportToFile(
+            task,
+            MakeLocation(TargetApp.NDM),
+            Path.Combine(_testDir, "out.mdma")
+        );
 
         Assert.That(result.Error!.Code, Is.EqualTo(MdmaErrorCode.TargetAppProcessRunning));
     }
@@ -118,11 +160,18 @@ public class ConversionServiceExportToFileTests
     [Test]
     public void ExportToFile_Propagates_Exporter_Failure()
     {
-        _ndmExporter.ResultToReturn = new MdmaError(MdmaErrorCode.ExportFailed, "simulated exporter failure");
+        _ndmExporter.ResultToReturn = new MdmaError(
+            MdmaErrorCode.ExportFailed,
+            "simulated exporter failure"
+        );
         var service = CreateService();
         var task = MakeTask(TargetApp.NDM);
 
-        var result = service.ExportToFile(task, MakeLocation(TargetApp.NDM), Path.Combine(_testDir, "out.mdma"));
+        var result = service.ExportToFile(
+            task,
+            MakeLocation(TargetApp.NDM),
+            Path.Combine(_testDir, "out.mdma")
+        );
 
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.Error!.Code, Is.EqualTo(MdmaErrorCode.ExportFailed));
@@ -138,10 +187,15 @@ public class ConversionServiceExportToFileTests
             backupManager: null!,
             exporters: new Dictionary<TargetApp, IMdmaExporter>(), // empty registry
             injectors: null!,
-            mdmaLoader: null!);
+            mdmaLoader: null!
+        );
         var task = MakeTask(TargetApp.NDM);
 
-        var result = service.ExportToFile(task, MakeLocation(TargetApp.NDM), Path.Combine(_testDir, "out.mdma"));
+        var result = service.ExportToFile(
+            task,
+            MakeLocation(TargetApp.NDM),
+            Path.Combine(_testDir, "out.mdma")
+        );
 
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.Error!.Code, Is.EqualTo(MdmaErrorCode.ExportFailed));
@@ -158,5 +212,38 @@ public class ConversionServiceExportToFileTests
         var result = service.ExportToFile(task, MakeLocation(TargetApp.NDM), expectedPath);
 
         Assert.That(result.Value, Is.EqualTo(expectedPath));
+    }
+
+    [Test]
+    public void ExportToFile_Logs_Operations_To_IMdmaLogger()
+    {
+        var fakeLogger = new FakeMdmaLogger();
+        var service = new ConversionService(
+            _workingRoot,
+            new ProcessGuard(_processLister),
+            new SpaceChecker(_diskSpace),
+            backupManager: null!,
+            exporters: new Dictionary<TargetApp, IMdmaExporter> { [TargetApp.NDM] = _ndmExporter },
+            injectors: null!,
+            mdmaLoader: null!,
+            logger: fakeLogger
+        );
+
+        var task = MakeTask(TargetApp.NDM);
+        service.ExportToFile(task, MakeLocation(TargetApp.NDM), Path.Combine(_testDir, "out.mdma"));
+
+        Assert.That(fakeLogger.Entries, Has.Count.AtLeast(2));
+        Assert.That(
+            fakeLogger.Entries.Any(e =>
+                e.Level == MdmaLogLevel.Info && e.Message.Contains("Starting export")
+            ),
+            Is.True
+        );
+        Assert.That(
+            fakeLogger.Entries.Any(e =>
+                e.Level == MdmaLogLevel.Info && e.Message.Contains("Successfully exported")
+            ),
+            Is.True
+        );
     }
 }

@@ -1,5 +1,7 @@
 namespace Mdma.Core.Tests;
 
+using Mdma.Core.Tests.Fixtures;
+
 public class TempCleanupServiceTests
 {
     private string _testDir = null!;
@@ -117,5 +119,43 @@ public class TempCleanupServiceTests
         service.SweepOrphans(_workingRoot);
 
         Assert.That(File.Exists(outsideFile), Is.True);
+    }
+
+    [Test]
+    public void SweepOrphans_Logs_Info_When_Items_Removed()
+    {
+        var tmpDir = Path.Combine(_testDir, ".mdma-tmp");
+        Directory.CreateDirectory(tmpDir);
+        File.WriteAllText(Path.Combine(tmpDir, "leftover.mdma"), "content");
+
+        var fakeLogger = new FakeMdmaLogger();
+        var service = new TempCleanupService(fakeLogger);
+
+        var result = service.SweepOrphans(_workingRoot);
+
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(
+            fakeLogger.Entries.Any(e =>
+                e.Level == MdmaLogLevel.Info && e.Message.Contains("Removed 1 orphaned items")
+            ),
+            Is.True
+        );
+    }
+
+    [Test]
+    public void SweepOrphans_Logs_Debug_When_Directory_Missing()
+    {
+        var fakeLogger = new FakeMdmaLogger();
+        var service = new TempCleanupService(fakeLogger);
+
+        var result = service.SweepOrphans(_workingRoot);
+
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(
+            fakeLogger.Entries.Any(e =>
+                e.Level == MdmaLogLevel.Debug && e.Message.Contains("does not exist")
+            ),
+            Is.True
+        );
     }
 }

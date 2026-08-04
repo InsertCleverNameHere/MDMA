@@ -15,18 +15,31 @@ public sealed class BackupManager : IBackupManager
 {
     private const string BackupsSubfolder = "backups";
     private readonly IClock _clock;
+    private readonly IMdmaLogger _logger;
 
-    public BackupManager(IClock clock)
+    public BackupManager(IClock clock, IMdmaLogger? logger = null)
     {
         _clock = clock;
+        _logger = logger ?? NullMdmaLogger.Instance;
     }
 
-    public Result<BackupHandle> CreateBackup(TargetAppLocation location, WorkingRoot workingRoot, string? taskNativeId = null)
+    public Result<BackupHandle> CreateBackup(
+        TargetAppLocation location,
+        WorkingRoot workingRoot,
+        string? taskNativeId = null
+    )
     {
+        _logger.LogInfo(
+            "BackupManager",
+            $"Starting backup snapshot creation for {location.App}.",
+            details: taskNativeId is not null ? $"taskNativeId: {taskNativeId}" : null
+        );
+
         var timestamp = _clock.UtcNow;
         // Timestamp + target + short random suffix, to avoid collisions if two
         // backups somehow get requested within the same second.
-        var id = $"{timestamp:yyyyMMdd'T'HHmmss'Z'}_{location.App}_{Guid.NewGuid().ToString("N")[..8]}";
+        var id =
+            $"{timestamp:yyyyMMdd'T'HHmmss'Z'}_{location.App}_{Guid.NewGuid().ToString("N")[..8]}";
 
         var backupDir = Path.Combine(workingRoot.Path, BackupsSubfolder, id);
 
@@ -40,18 +53,29 @@ public sealed class BackupManager : IBackupManager
                 MdmaErrorCode.BackupFailed,
                 "Could not create the backup snapshot directory.",
                 Details: backupDir,
-                Inner: ex);
+                Inner: ex
+            );
         }
 
         var entriesResult = location.App switch
         {
             TargetApp.NDM => BackupNdm(location, taskNativeId, backupDir),
             TargetApp.JD2 => BackupJd2(location, backupDir),
-            _ => new MdmaError(MdmaErrorCode.BackupFailed, "Unsupported target app.", Details: location.App.ToString()),
+            _ => new MdmaError(
+                MdmaErrorCode.BackupFailed,
+                "Unsupported target app.",
+                Details: location.App.ToString()
+            ),
         };
 
         if (!entriesResult.IsSuccess)
         {
+            _logger.LogError(
+                "BackupManager",
+                "Backup failed during file copy.",
+                details: entriesResult.Error?.Details,
+                exception: entriesResult.Error?.Inner
+            );
             TryDeleteBestEffort(backupDir);
             return entriesResult.Error!;
         }
@@ -69,13 +93,22 @@ public sealed class BackupManager : IBackupManager
                 MdmaErrorCode.BackupFailed,
                 "Could not write the backup manifest.",
                 Details: backupDir,
-                Inner: ex);
+                Inner: ex
+            );
         }
 
+        _logger.LogInfo(
+            "BackupManager",
+            $"Backup snapshot '{id}' created successfully.",
+            details: backupDir
+        );
         return Result<BackupHandle>.Ok(new BackupHandle(id, location.App, timestamp, backupDir));
     }
 
-    public Result<IReadOnlyList<BackupHandle>> ListBackups(WorkingRoot workingRoot, TargetApp? filterBy = null)
+    public Result<IReadOnlyList<BackupHandle>> ListBackups(
+        WorkingRoot workingRoot,
+        TargetApp? filterBy = null
+    )
     {
         var backupsRoot = Path.Combine(workingRoot.Path, BackupsSubfolder);
         if (!Directory.Exists(backupsRoot))
@@ -87,15 +120,27 @@ public sealed class BackupManager : IBackupManager
         foreach (var dir in Directory.GetDirectories(backupsRoot))
         {
             var manifestPath = Path.Combine(dir, "manifest.json");
-            if (!File.Exists(manifestPath)) continue; // not a valid snapshot, skip rather than fail the whole listing
+            if (!File.Exists(manifestPath))
+                continue; // not a valid snapshot, skip rather than fail the whole listing
 
             try
             {
-                var manifest = JsonSerializer.Deserialize<BackupManifest>(File.ReadAllText(manifestPath));
-                if (manifest is null) continue;
-                if (filterBy is not null && manifest.Target != filterBy) continue;
+                var manifest = JsonSerializer.Deserialize<BackupManifest>(
+                    File.ReadAllText(manifestPath)
+                );
+                if (manifest is null)
+                    continue;
+                if (filterBy is not null && manifest.Target != filterBy)
+                    continue;
 
-                handles.Add(new BackupHandle(Path.GetFileName(dir), manifest.Target, manifest.CreatedAt, dir));
+                handles.Add(
+                    new BackupHandle(
+                        Path.GetFileName(dir),
+                        manifest.Target,
+                        manifest.CreatedAt,
+                        dir
+                    )
+                );
             }
             catch
             {
@@ -109,14 +154,19 @@ public sealed class BackupManager : IBackupManager
         return Result<IReadOnlyList<BackupHandle>>.Ok(handles);
     }
 
-    private static Result<IReadOnlyList<BackupManifestEntry>> BackupNdm(TargetAppLocation location, string? taskNativeId, string backupDir)
+    private static Result<IReadOnlyList<BackupManifestEntry>> BackupNdm(
+        TargetAppLocation location,
+        string? taskNativeId,
+        string backupDir
+    )
     {
         if (location.MetadataDir is null)
         {
             return new MdmaError(
                 MdmaErrorCode.BackupFailed,
                 "No metadata directory (neatdb.db location) is known for this NDM location.",
-                Details: "TargetAppLocation.MetadataDir was null.");
+                Details: "TargetAppLocation.MetadataDir was null."
+            );
         }
 
         var dbPath = Path.Combine(location.MetadataDir, "neatdb.db");
@@ -126,13 +176,16 @@ public sealed class BackupManager : IBackupManager
             // nothing to protect yet, not an error. A no-op backup (empty
             // manifest) is correct: there is nothing to restore because there
             // was nothing there before this operation.
-            return Result<IReadOnlyList<BackupManifestEntry>>.Ok(Array.Empty<BackupManifestEntry>());
+            return Result<IReadOnlyList<BackupManifestEntry>>.Ok(
+                Array.Empty<BackupManifestEntry>()
+            );
         }
 
         var entries = new List<BackupManifestEntry>();
 
         var dbEntry = CopyAndHash(dbPath, Path.Combine(backupDir, "neatdb.db"), "neatdb.db");
-        if (!dbEntry.IsSuccess) return dbEntry.Error!;
+        if (!dbEntry.IsSuccess)
+            return dbEntry.Error!;
         entries.Add(dbEntry.Value!);
 
         if (taskNativeId is not null && location.InstallOrConfigDir is not null)
@@ -145,8 +198,13 @@ public sealed class BackupManager : IBackupManager
                 {
                     var relative = Path.GetRelativePath(taskDir, file);
                     var backupRelative = Path.Combine("task", taskNativeId, relative);
-                    var entry = CopyAndHash(file, Path.Combine(backupDir, backupRelative), backupRelative);
-                    if (!entry.IsSuccess) return entry.Error!;
+                    var entry = CopyAndHash(
+                        file,
+                        Path.Combine(backupDir, backupRelative),
+                        backupRelative
+                    );
+                    if (!entry.IsSuccess)
+                        return entry.Error!;
                     entries.Add(entry.Value!);
                 }
             }
@@ -157,14 +215,18 @@ public sealed class BackupManager : IBackupManager
         return Result<IReadOnlyList<BackupManifestEntry>>.Ok(entries);
     }
 
-    private static Result<IReadOnlyList<BackupManifestEntry>> BackupJd2(TargetAppLocation location, string backupDir)
+    private static Result<IReadOnlyList<BackupManifestEntry>> BackupJd2(
+        TargetAppLocation location,
+        string backupDir
+    )
     {
         if (location.InstallOrConfigDir is null)
         {
             return new MdmaError(
                 MdmaErrorCode.BackupFailed,
                 "No cfg\\ directory is known for this JD2 location.",
-                Details: "TargetAppLocation.InstallOrConfigDir was null.");
+                Details: "TargetAppLocation.InstallOrConfigDir was null."
+            );
         }
 
         string[] candidates;
@@ -178,26 +240,34 @@ public sealed class BackupManager : IBackupManager
                 MdmaErrorCode.BackupFailed,
                 "Could not enumerate downloadList*.zip files.",
                 Details: location.InstallOrConfigDir,
-                Inner: ex);
+                Inner: ex
+            );
         }
 
         if (candidates.Length == 0)
         {
             // No downloadList*.zip at all -- fresh JD2 install with nothing to
             // protect yet. No-op backup is correct, same reasoning as NDM above.
-            return Result<IReadOnlyList<BackupManifestEntry>>.Ok(Array.Empty<BackupManifestEntry>());
+            return Result<IReadOnlyList<BackupManifestEntry>>.Ok(
+                Array.Empty<BackupManifestEntry>()
+            );
         }
 
         var newestZip = Jd2Locator.PickNewest(candidates);
         var fileName = Path.GetFileName(newestZip);
 
         var entry = CopyAndHash(newestZip, Path.Combine(backupDir, fileName), fileName);
-        if (!entry.IsSuccess) return entry.Error!;
+        if (!entry.IsSuccess)
+            return entry.Error!;
 
         return Result<IReadOnlyList<BackupManifestEntry>>.Ok(new[] { entry.Value! });
     }
 
-    private static Result<BackupManifestEntry> CopyAndHash(string sourcePath, string destinationPath, string backupRelativePath)
+    private static Result<BackupManifestEntry> CopyAndHash(
+        string sourcePath,
+        string destinationPath,
+        string backupRelativePath
+    )
     {
         try
         {
@@ -208,7 +278,9 @@ public sealed class BackupManager : IBackupManager
             using var stream = File.OpenRead(destinationPath);
             var hash = Convert.ToHexString(sha.ComputeHash(stream));
 
-            return Result<BackupManifestEntry>.Ok(new BackupManifestEntry(sourcePath, backupRelativePath, hash));
+            return Result<BackupManifestEntry>.Ok(
+                new BackupManifestEntry(sourcePath, backupRelativePath, hash)
+            );
         }
         catch (Exception ex)
         {
@@ -216,7 +288,8 @@ public sealed class BackupManager : IBackupManager
                 MdmaErrorCode.BackupFailed,
                 "Failed to copy a file into the backup snapshot.",
                 Details: sourcePath,
-                Inner: ex);
+                Inner: ex
+            );
         }
     }
 
@@ -224,7 +297,8 @@ public sealed class BackupManager : IBackupManager
     {
         try
         {
-            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            if (Directory.Exists(dir))
+                Directory.Delete(dir, recursive: true);
         }
         catch
         {

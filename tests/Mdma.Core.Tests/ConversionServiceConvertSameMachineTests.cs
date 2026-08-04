@@ -16,7 +16,10 @@ public class ConversionServiceConvertSameMachineTests
     [SetUp]
     public void SetUp()
     {
-        _testDir = Path.Combine(Path.GetTempPath(), "mdma-conversionservice-samemachine-test-" + Guid.NewGuid());
+        _testDir = Path.Combine(
+            Path.GetTempPath(),
+            "mdma-conversionservice-samemachine-test-" + Guid.NewGuid()
+        );
         Directory.CreateDirectory(_testDir);
         _workingRoot = new WorkingRoot(_testDir, true, false);
 
@@ -43,7 +46,13 @@ public class ConversionServiceConvertSameMachineTests
         public TargetApp SourceApp => TargetApp.NDM;
         public string? LastWrittenPath { get; private set; }
 
-        public Result<string> Export(DownloadTaskSummary task, TargetAppLocation sourceLocation, WorkingRoot workingRoot, string destinationMdmaPath, IProgress<OperationProgress>? progress = null)
+        public Result<string> Export(
+            DownloadTaskSummary task,
+            TargetAppLocation sourceLocation,
+            WorkingRoot workingRoot,
+            string destinationMdmaPath,
+            IProgress<OperationProgress>? progress = null
+        )
         {
             LastWrittenPath = destinationMdmaPath;
             new MdmaFixtureBuilder()
@@ -54,23 +63,52 @@ public class ConversionServiceConvertSameMachineTests
         }
     }
 
-    private ConversionService CreateService(IMdmaExporter? exporterOverride = null) => new(
-        _workingRoot,
-        new ProcessGuard(_processLister),
-        new SpaceChecker(_diskSpace),
-        _backupManager,
-        exporters: new Dictionary<TargetApp, IMdmaExporter> { [TargetApp.NDM] = exporterOverride ?? _ndmExporter },
-        injectors: new Dictionary<TargetApp, IDownloadListInjector> { [TargetApp.JD2] = _jd2Injector },
-        mdmaLoader: _mdmaLoader);
+    private ConversionService CreateService(IMdmaExporter? exporterOverride = null) =>
+        new(
+            _workingRoot,
+            new ProcessGuard(_processLister),
+            new SpaceChecker(_diskSpace),
+            _backupManager,
+            exporters: new Dictionary<TargetApp, IMdmaExporter>
+            {
+                [TargetApp.NDM] = exporterOverride ?? _ndmExporter,
+            },
+            injectors: new Dictionary<TargetApp, IDownloadListInjector>
+            {
+                [TargetApp.JD2] = _jd2Injector,
+            },
+            mdmaLoader: _mdmaLoader
+        );
 
     private static DownloadTaskSummary MakeTask() =>
-        new("1", TargetApp.NDM, "f.bin", "https://example.com/f.bin", 1000, 100, "Paused ( 10% )", true);
+        new(
+            "1",
+            TargetApp.NDM,
+            "f.bin",
+            "https://example.com/f.bin",
+            1000,
+            100,
+            "Paused ( 10% )",
+            true
+        );
 
     private static TargetAppLocation MakeNdmLocation() =>
-        new(TargetApp.NDM, "/ndm/temp", "/ndm/meta", DownloadDirectory: "/ndm/downloads", WasAutoDetected: true);
+        new(
+            TargetApp.NDM,
+            "/ndm/temp",
+            "/ndm/meta",
+            DownloadDirectory: "/ndm/downloads",
+            WasAutoDetected: true
+        );
 
     private static TargetAppLocation MakeJd2Location() =>
-        new(TargetApp.JD2, "/jd2/cfg", MetadataDir: null, DownloadDirectory: "/jd2/downloads", WasAutoDetected: true);
+        new(
+            TargetApp.JD2,
+            "/jd2/cfg",
+            MetadataDir: null,
+            DownloadDirectory: "/jd2/downloads",
+            WasAutoDetected: true
+        );
 
     [Test]
     public void ConvertSameMachine_Succeeds_Full_Happy_Path_With_Real_Temp_File()
@@ -109,27 +147,41 @@ public class ConversionServiceConvertSameMachineTests
 
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.Error!.Code, Is.EqualTo(MdmaErrorCode.TargetAppProcessRunning));
-        Assert.That(_ndmExporter.CallCount, Is.EqualTo(0), "export must not run if destination guard fails, even though destination is checked second");
+        Assert.That(
+            _ndmExporter.CallCount,
+            Is.EqualTo(0),
+            "export must not run if destination guard fails, even though destination is checked second"
+        );
     }
 
     [Test]
     public void ConvertSameMachine_Propagates_Export_Failure_Without_Attempting_Import()
     {
-        _ndmExporter.ResultToReturn = new MdmaError(MdmaErrorCode.ExportFailed, "simulated export failure");
+        _ndmExporter.ResultToReturn = new MdmaError(
+            MdmaErrorCode.ExportFailed,
+            "simulated export failure"
+        );
         var service = CreateService();
 
         var result = service.ConvertSameMachine(MakeTask(), MakeNdmLocation(), MakeJd2Location());
 
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.Error!.Code, Is.EqualTo(MdmaErrorCode.ExportFailed));
-        Assert.That(_backupManager.CreateBackupCallCount, Is.EqualTo(0), "import (and its backup step) must not run if export fails");
+        Assert.That(
+            _backupManager.CreateBackupCallCount,
+            Is.EqualTo(0),
+            "import (and its backup step) must not run if export fails"
+        );
     }
 
     [Test]
     public void ConvertSameMachine_Propagates_Import_Failure()
     {
         var realExporter = new RealFileWritingFakeExporter();
-        _backupManager.CreateBackupResultToReturn = new MdmaError(MdmaErrorCode.BackupFailed, "simulated backup failure");
+        _backupManager.CreateBackupResultToReturn = new MdmaError(
+            MdmaErrorCode.BackupFailed,
+            "simulated backup failure"
+        );
         var service = CreateService(realExporter);
 
         var result = service.ConvertSameMachine(MakeTask(), MakeNdmLocation(), MakeJd2Location());
@@ -148,7 +200,11 @@ public class ConversionServiceConvertSameMachineTests
 
         Assert.That(result.IsSuccess, Is.True);
         Assert.That(realExporter.LastWrittenPath, Is.Not.Null);
-        Assert.That(File.Exists(realExporter.LastWrittenPath!), Is.False, "temp .mdma should be deleted after a successful conversion");
+        Assert.That(
+            File.Exists(realExporter.LastWrittenPath!),
+            Is.False,
+            "temp .mdma should be deleted after a successful conversion"
+        );
     }
 
     [Test]
@@ -182,7 +238,10 @@ public class ConversionServiceConvertSameMachineTests
 
         service.ConvertSameMachine(MakeTask(), MakeNdmLocation(), MakeJd2Location());
 
-        Assert.That(realExporter.LastWrittenPath, Does.StartWith(Path.Combine(_workingRoot.Path, ".mdma-tmp")));
+        Assert.That(
+            realExporter.LastWrittenPath,
+            Does.StartWith(Path.Combine(_workingRoot.Path, ".mdma-tmp"))
+        );
     }
 
     [Test]
@@ -197,5 +256,41 @@ public class ConversionServiceConvertSameMachineTests
         var result = service.ConvertSameMachine(MakeTask(), MakeNdmLocation(), MakeJd2Location());
 
         Assert.That(result.IsSuccess, Is.True);
+    }
+
+    [Test]
+    public void ConvertSameMachine_Logs_Operations_To_IMdmaLogger()
+    {
+        var fakeLogger = new FakeMdmaLogger();
+        var realExporter = new RealFileWritingFakeExporter();
+        var service = new ConversionService(
+            _workingRoot,
+            new ProcessGuard(_processLister),
+            new SpaceChecker(_diskSpace),
+            _backupManager,
+            exporters: new Dictionary<TargetApp, IMdmaExporter> { [TargetApp.NDM] = realExporter },
+            injectors: new Dictionary<TargetApp, IDownloadListInjector>
+            {
+                [TargetApp.JD2] = _jd2Injector,
+            },
+            mdmaLoader: _mdmaLoader,
+            logger: fakeLogger
+        );
+
+        service.ConvertSameMachine(MakeTask(), MakeNdmLocation(), MakeJd2Location());
+
+        Assert.That(
+            fakeLogger.Entries.Any(e =>
+                e.Level == MdmaLogLevel.Info
+                && e.Message.Contains("Starting same-machine conversion")
+            ),
+            Is.True
+        );
+        Assert.That(
+            fakeLogger.Entries.Any(e =>
+                e.Level == MdmaLogLevel.Info && e.Message.Contains("completed successfully")
+            ),
+            Is.True
+        );
     }
 }

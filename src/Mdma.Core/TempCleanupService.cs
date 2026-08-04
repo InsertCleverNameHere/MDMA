@@ -5,7 +5,8 @@ namespace Mdma.Core;
 /// the sweep is best-effort by nature, so these are reported, not thrown.</summary>
 public sealed record TempCleanupReport(
     IReadOnlyList<string> Removed,
-    IReadOnlyList<string> FailedToRemove);
+    IReadOnlyList<string> FailedToRemove
+);
 
 /// <summary>
 /// Sweeps <workingRoot>\.mdma-tmp\ for orphaned files/folders left behind by
@@ -25,13 +26,27 @@ public interface ITempCleanupService
 public sealed class TempCleanupService : ITempCleanupService
 {
     private const string TempSubfolder = ".mdma-tmp";
+    private readonly IMdmaLogger _logger;
+
+    public TempCleanupService(IMdmaLogger? logger = null)
+    {
+        _logger = logger ?? NullMdmaLogger.Instance;
+    }
 
     public Result<TempCleanupReport> SweepOrphans(WorkingRoot workingRoot)
     {
+        _logger.LogDebug("TempCleanupService", "Starting orphan sweep in .mdma-tmp...");
+
         var tempDir = Path.Combine(workingRoot.Path, TempSubfolder);
         if (!Directory.Exists(tempDir))
         {
-            return Result<TempCleanupReport>.Ok(new TempCleanupReport(Array.Empty<string>(), Array.Empty<string>()));
+            _logger.LogDebug(
+                "TempCleanupService",
+                ".mdma-tmp directory does not exist; nothing to sweep."
+            );
+            return Result<TempCleanupReport>.Ok(
+                new TempCleanupReport(Array.Empty<string>(), Array.Empty<string>())
+            );
         }
 
         var removed = new List<string>();
@@ -47,7 +62,9 @@ public sealed class TempCleanupService : ITempCleanupService
             // Can't even list the directory -- report nothing removable rather
             // than failing the whole sweep; a locked/inaccessible .mdma-tmp
             // itself is an edge case worth surfacing as "0 removed", not a crash.
-            return Result<TempCleanupReport>.Ok(new TempCleanupReport(Array.Empty<string>(), Array.Empty<string>()));
+            return Result<TempCleanupReport>.Ok(
+                new TempCleanupReport(Array.Empty<string>(), Array.Empty<string>())
+            );
         }
 
         foreach (var entry in entries)
@@ -68,6 +85,23 @@ public sealed class TempCleanupService : ITempCleanupService
             {
                 failed.Add(entry);
             }
+        }
+
+        if (removed.Count > 0)
+        {
+            _logger.LogInfo(
+                "TempCleanupService",
+                $"Sweep complete. Removed {removed.Count} orphaned items.",
+                details: string.Join("; ", removed)
+            );
+        }
+        if (failed.Count > 0)
+        {
+            _logger.LogWarning(
+                "TempCleanupService",
+                $"Failed to remove {failed.Count} orphaned items during sweep.",
+                details: string.Join("; ", failed)
+            );
         }
 
         return Result<TempCleanupReport>.Ok(new TempCleanupReport(removed, failed));

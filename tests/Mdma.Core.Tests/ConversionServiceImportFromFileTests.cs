@@ -17,7 +17,10 @@ public class ConversionServiceImportFromFileTests
     [SetUp]
     public void SetUp()
     {
-        _testDir = Path.Combine(Path.GetTempPath(), "mdma-conversionservice-import-test-" + Guid.NewGuid());
+        _testDir = Path.Combine(
+            Path.GetTempPath(),
+            "mdma-conversionservice-import-test-" + Guid.NewGuid()
+        );
         Directory.CreateDirectory(_testDir);
         _workingRoot = new WorkingRoot(_testDir, true, false);
 
@@ -41,20 +44,38 @@ public class ConversionServiceImportFromFileTests
             Directory.Delete(_testDir, recursive: true);
     }
 
-    private ConversionService CreateService() => new(
-        _workingRoot,
-        new ProcessGuard(_processLister),
-        new SpaceChecker(_diskSpace),
-        _backupManager,
-        exporters: null!, // not used by ImportFromFile
-        injectors: new Dictionary<TargetApp, IDownloadListInjector> { [TargetApp.NDM] = _ndmInjector, [TargetApp.JD2] = _jd2Injector },
-        mdmaLoader: _mdmaLoader);
+    private ConversionService CreateService() =>
+        new(
+            _workingRoot,
+            new ProcessGuard(_processLister),
+            new SpaceChecker(_diskSpace),
+            _backupManager,
+            exporters: null!, // not used by ImportFromFile
+            injectors: new Dictionary<TargetApp, IDownloadListInjector>
+            {
+                [TargetApp.NDM] = _ndmInjector,
+                [TargetApp.JD2] = _jd2Injector,
+            },
+            mdmaLoader: _mdmaLoader
+        );
 
     private static TargetAppLocation MakeNdmLocation() =>
-        new(TargetApp.NDM, "/ndm/temp", "/ndm/meta", DownloadDirectory: "/ndm/downloads", WasAutoDetected: true);
+        new(
+            TargetApp.NDM,
+            "/ndm/temp",
+            "/ndm/meta",
+            DownloadDirectory: "/ndm/downloads",
+            WasAutoDetected: true
+        );
 
     private static TargetAppLocation MakeJd2Location() =>
-        new(TargetApp.JD2, "/jd2/cfg", MetadataDir: null, DownloadDirectory: "/jd2/downloads", WasAutoDetected: true);
+        new(
+            TargetApp.JD2,
+            "/jd2/cfg",
+            MetadataDir: null,
+            DownloadDirectory: "/jd2/downloads",
+            WasAutoDetected: true
+        );
 
     [Test]
     public void ImportFromFile_Succeeds_Full_Happy_Path()
@@ -113,21 +134,31 @@ public class ConversionServiceImportFromFileTests
     [Test]
     public void ImportFromFile_Aborts_Before_Load_When_Backup_Fails()
     {
-        _backupManager.CreateBackupResultToReturn = new MdmaError(MdmaErrorCode.BackupFailed, "simulated backup failure");
+        _backupManager.CreateBackupResultToReturn = new MdmaError(
+            MdmaErrorCode.BackupFailed,
+            "simulated backup failure"
+        );
         var service = CreateService();
 
         var result = service.ImportFromFile(_validMdmaPath, MakeNdmLocation());
 
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.Error!.Code, Is.EqualTo(MdmaErrorCode.BackupFailed));
-        Assert.That(_mdmaLoader.CallCount, Is.EqualTo(0), "loader must not run if backup (Critical step) fails");
+        Assert.That(
+            _mdmaLoader.CallCount,
+            Is.EqualTo(0),
+            "loader must not run if backup (Critical step) fails"
+        );
         Assert.That(_ndmInjector.CallCount, Is.EqualTo(0));
     }
 
     [Test]
     public void ImportFromFile_Aborts_Before_Inject_When_Load_Fails()
     {
-        _mdmaLoader.ResultToReturn = new MdmaError(MdmaErrorCode.MdmaChecksumMismatch, "simulated corrupt package");
+        _mdmaLoader.ResultToReturn = new MdmaError(
+            MdmaErrorCode.MdmaChecksumMismatch,
+            "simulated corrupt package"
+        );
         var service = CreateService();
 
         var result = service.ImportFromFile(_validMdmaPath, MakeNdmLocation());
@@ -140,7 +171,10 @@ public class ConversionServiceImportFromFileTests
     [Test]
     public void ImportFromFile_Propagates_Injector_Failure()
     {
-        _ndmInjector.ResultToReturn = new MdmaError(MdmaErrorCode.InjectionFailed, "simulated injector failure");
+        _ndmInjector.ResultToReturn = new MdmaError(
+            MdmaErrorCode.InjectionFailed,
+            "simulated injector failure"
+        );
         var service = CreateService();
 
         var result = service.ImportFromFile(_validMdmaPath, MakeNdmLocation());
@@ -171,11 +205,47 @@ public class ConversionServiceImportFromFileTests
             _backupManager,
             exporters: null!,
             injectors: new Dictionary<TargetApp, IDownloadListInjector>(), // empty
-            mdmaLoader: _mdmaLoader);
+            mdmaLoader: _mdmaLoader
+        );
 
         var result = service.ImportFromFile(_validMdmaPath, MakeNdmLocation());
 
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.Error!.Code, Is.EqualTo(MdmaErrorCode.InjectionFailed));
+    }
+
+    [Test]
+    public void ImportFromFile_Logs_Operations_To_IMdmaLogger()
+    {
+        var fakeLogger = new FakeMdmaLogger();
+        var service = new ConversionService(
+            _workingRoot,
+            new ProcessGuard(_processLister),
+            new SpaceChecker(_diskSpace),
+            _backupManager,
+            exporters: null!,
+            injectors: new Dictionary<TargetApp, IDownloadListInjector>
+            {
+                [TargetApp.NDM] = _ndmInjector,
+            },
+            mdmaLoader: _mdmaLoader,
+            logger: fakeLogger
+        );
+
+        service.ImportFromFile(_validMdmaPath, MakeNdmLocation());
+
+        Assert.That(fakeLogger.Entries, Has.Count.AtLeast(2));
+        Assert.That(
+            fakeLogger.Entries.Any(e =>
+                e.Level == MdmaLogLevel.Info && e.Message.Contains("Starting import")
+            ),
+            Is.True
+        );
+        Assert.That(
+            fakeLogger.Entries.Any(e =>
+                e.Level == MdmaLogLevel.Info && e.Message.Contains("Successfully imported")
+            ),
+            Is.True
+        );
     }
 }

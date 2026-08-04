@@ -7,8 +7,9 @@ namespace Mdma.Core;
 /// </summary>
 public sealed record WorkingRoot(
     string Path,
-    bool IsPortableDefault,   // true if this is <exe dir>\MDMA_Work
-    bool IsFallback);         // true if this had to fall back to %LOCALAPPDATA%
+    bool IsPortableDefault, // true if this is <exe dir>\MDMA_Work
+    bool IsFallback
+); // true if this had to fall back to %LOCALAPPDATA%
 
 public interface IWorkingDirectoryProvider
 {

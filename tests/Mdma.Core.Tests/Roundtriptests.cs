@@ -383,4 +383,83 @@ public class RoundTripTests
             Is.EqualTo("https://distinctive-test-url.example.com/f.bin")
         );
     }
+
+    [Test]
+    public void RoundTrip_With_FileLogger_Writes_Structured_Log_Entries_To_Disk()
+    {
+        var fileLogger = new FileLogger(_workingRoot);
+        var service = new ConversionService(
+            _workingRoot,
+            new ProcessGuard(new FakeProcessLister()),
+            new SpaceChecker(new FakeDiskSpaceSource { FreeBytes = long.MaxValue }),
+            new BackupManager(new FakeClock(), fileLogger),
+            exporters: new Dictionary<TargetApp, IMdmaExporter>
+            {
+                [TargetApp.NDM] = new NdmExporter(),
+                [TargetApp.JD2] = new Jd2Exporter(),
+            },
+            injectors: new Dictionary<TargetApp, IDownloadListInjector>
+            {
+                [TargetApp.NDM] = new NdmInjector(new FakeRegistryAccessor(), new AtomicWriter()),
+                [TargetApp.JD2] = new Jd2Injector(new AtomicWriter()),
+            },
+            mdmaLoader: new MdmaLoader(),
+            logger: fileLogger
+        );
+
+        var sourceRoot = Path.Combine(_testDir, "ndm-source");
+        var ndmFixture = new NdmFixtureBuilder(sourceRoot).WithTask(
+            1,
+            "f.bin",
+            "https://example.com/f.bin",
+            10,
+            (0, 9, 10)
+        );
+        ndmFixture.Build();
+        var sourceLocation = new TargetAppLocation(
+            TargetApp.NDM,
+            ndmFixture.TempDirectory,
+            sourceRoot,
+            ndmFixture.DownloadDirectory,
+            true
+        );
+        var task = new DownloadTaskSummary(
+            "1",
+            TargetApp.NDM,
+            "f.bin",
+            "https://example.com/f.bin",
+            10,
+            10,
+            "Paused ( 100% )",
+            true
+        );
+
+        var destCfgDir = Path.Combine(_testDir, "jd2-dest", "cfg");
+        Directory.CreateDirectory(destCfgDir);
+        var destLocation = new TargetAppLocation(
+            TargetApp.JD2,
+            destCfgDir,
+            null,
+            Path.Combine(_testDir, "jd2-dest", "downloads"),
+            true
+        );
+
+        var result = service.ConvertSameMachine(task, sourceLocation, destLocation);
+
+        Assert.That(result.IsSuccess, Is.True);
+
+        var logsDir = Path.Combine(_workingRoot.Path, "logs");
+        Assert.That(Directory.Exists(logsDir), Is.True);
+        var logFiles = Directory.GetFiles(logsDir, "*.log");
+        Assert.That(logFiles, Has.Length.EqualTo(1));
+
+        var lines = File.ReadAllLines(logFiles[0]);
+        Assert.That(lines, Has.Length.AtLeast(2));
+        Assert.That(
+            lines.Any(l =>
+                l.Contains("ConversionService") && l.Contains("Starting same-machine conversion")
+            ),
+            Is.True
+        );
+    }
 }

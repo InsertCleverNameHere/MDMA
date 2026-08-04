@@ -42,10 +42,14 @@ public sealed class FakeProcessLister : IProcessLister
     public bool IsRunning(string processName)
     {
         var normalized = processName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
-            ? processName[..^4] : processName;
+            ? processName[..^4]
+            : processName;
         return RunningProcesses.Any(p =>
-            (p.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? p[..^4] : p)
-            .Equals(normalized, StringComparison.OrdinalIgnoreCase));
+            (p.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? p[..^4] : p).Equals(
+                normalized,
+                StringComparison.OrdinalIgnoreCase
+            )
+        );
     }
 }
 
@@ -58,7 +62,13 @@ public sealed class FakeMdmaExporter : IMdmaExporter
     public int CallCount { get; private set; }
     public Result<string> ResultToReturn { get; set; } = Result<string>.Ok("fake-output.mdma");
 
-    public Result<string> Export(DownloadTaskSummary task, TargetAppLocation sourceLocation, WorkingRoot workingRoot, string destinationMdmaPath, IProgress<OperationProgress>? progress = null)
+    public Result<string> Export(
+        DownloadTaskSummary task,
+        TargetAppLocation sourceLocation,
+        WorkingRoot workingRoot,
+        string destinationMdmaPath,
+        IProgress<OperationProgress>? progress = null
+    )
     {
         CallCount++;
         return ResultToReturn;
@@ -73,7 +83,11 @@ public sealed class FakeDownloadListInjector : IDownloadListInjector
     public int CallCount { get; private set; }
     public Result ResultToReturn { get; set; } = Result.Ok();
 
-    public Result Inject(MdmaPackage package, TargetAppLocation destinationLocation, IProgress<OperationProgress>? progress = null)
+    public Result Inject(
+        MdmaPackage package,
+        TargetAppLocation destinationLocation,
+        IProgress<OperationProgress>? progress = null
+    )
     {
         CallCount++;
         return ResultToReturn;
@@ -86,7 +100,8 @@ public sealed class FakeDownloadListInjector : IDownloadListInjector
 public sealed class FakeMdmaLoader : IMdmaLoader
 {
     public int CallCount { get; private set; }
-    public Result<MdmaPackage> ResultToReturn { get; set; } = Result<MdmaPackage>.Ok(DefaultPackage());
+    public Result<MdmaPackage> ResultToReturn { get; set; } =
+        Result<MdmaPackage>.Ok(DefaultPackage());
 
     public Result<MdmaPackage> Load(string mdmaFilePath, WorkingRoot workingRoot)
     {
@@ -105,8 +120,13 @@ public sealed class FakeMdmaLoader : IMdmaLoader
             MimeType: null,
             Headers: Array.Empty<KeyValuePair<string, string>>(),
             CreatedEpochMillis: 0,
-            Chunks: new[] { new ChunkRange(0, 0, 99, 100) });
-        return new MdmaPackage(manifest, new Dictionary<int, string> { [0] = "/fake/chunk_0.bin" }, "/fake/source.mdma");
+            Chunks: new[] { new ChunkRange(0, 0, 99, 100) }
+        );
+        return new MdmaPackage(
+            manifest,
+            new Dictionary<int, string> { [0] = "/fake/chunk_0.bin" },
+            "/fake/source.mdma"
+        );
     }
 }
 
@@ -116,23 +136,62 @@ public sealed class FakeBackupManager : IBackupManager
 {
     public int CreateBackupCallCount { get; private set; }
     public Result<BackupHandle> CreateBackupResultToReturn { get; set; } =
-        Result<BackupHandle>.Ok(new BackupHandle("fake-backup", TargetApp.NDM, DateTimeOffset.UtcNow, "/fake/backup"));
+        Result<BackupHandle>.Ok(
+            new BackupHandle("fake-backup", TargetApp.NDM, DateTimeOffset.UtcNow, "/fake/backup")
+        );
 
     public Result<IReadOnlyList<BackupHandle>> ListBackupsResultToReturn { get; set; } =
         Result<IReadOnlyList<BackupHandle>>.Ok(Array.Empty<BackupHandle>());
 
-    public Result<BackupHandle> CreateBackup(TargetAppLocation location, WorkingRoot workingRoot, string? taskNativeId = null)
+    public Result<BackupHandle> CreateBackup(
+        TargetAppLocation location,
+        WorkingRoot workingRoot,
+        string? taskNativeId = null
+    )
     {
         CreateBackupCallCount++;
         return CreateBackupResultToReturn;
     }
 
-    public Result<IReadOnlyList<BackupHandle>> ListBackups(WorkingRoot workingRoot, TargetApp? filterBy = null) =>
-        ListBackupsResultToReturn;
+    public Result<IReadOnlyList<BackupHandle>> ListBackups(
+        WorkingRoot workingRoot,
+        TargetApp? filterBy = null
+    ) => ListBackupsResultToReturn;
 }
 
 /// <summary>Fixed-time fake for IClock — deterministic timestamps in tests.</summary>
 public sealed class FakeClock : IClock
 {
-    public DateTimeOffset UtcNow { get; set; } = new DateTimeOffset(2026, 7, 29, 12, 0, 0, TimeSpan.Zero);
+    public DateTimeOffset UtcNow { get; set; } =
+        new DateTimeOffset(2026, 7, 29, 12, 0, 0, TimeSpan.Zero);
+}
+
+/// <summary>In-memory fake for IMdmaLogger — records all log entries for assertions in tests.</summary>
+public sealed class FakeMdmaLogger : IMdmaLogger
+{
+    public List<LogEntry> Entries { get; } = new();
+    private readonly object _lock = new();
+
+    public void Log(
+        MdmaLogLevel level,
+        string component,
+        string message,
+        string? details = null,
+        Exception? exception = null
+    )
+    {
+        lock (_lock)
+        {
+            Entries.Add(
+                new LogEntry(
+                    Timestamp: DateTimeOffset.UtcNow,
+                    Level: level,
+                    Component: component,
+                    Message: message,
+                    Details: details,
+                    Exception: exception?.ToString()
+                )
+            );
+        }
+    }
 }
