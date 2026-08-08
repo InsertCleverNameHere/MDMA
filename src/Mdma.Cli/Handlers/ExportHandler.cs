@@ -42,42 +42,25 @@ public static class ExportHandler
         var workingRoot = workDirResult.Value!;
 
         var registry = registryOverride ?? new RegistryAccessor();
-        IDownloadManagerLocator locator =
-            targetApp == TargetApp.NDM ? new NdmLocator(registry) : new Jd2Locator();
+        var resolver = new LocationResolver(registry);
         IDownloadListReader reader =
             targetApp == TargetApp.NDM ? new NdmListReader() : new Jd2ListReader();
 
-        Result<TargetAppLocation> locationResult = !string.IsNullOrEmpty(args.ManualPath)
-            ? locator.ValidateManualPath(args.ManualPath)
-            : locator.TryAutoDetect();
+        var locationResult = resolver.ResolveLocation(
+            targetApp.Value,
+            manualPathOverride: args.ManualPath,
+            metadataDirOverride: args.MetadataDir,
+            tempDirOverride: args.TempDir,
+            downloadDirOverride: args.DownloadDir
+        );
 
         if (!locationResult.IsSuccess)
         {
-            ConsoleFormatter.PrintError(locationResult.Error!, args.Json);
+            ConsoleFormatter.PrintError(locationResult.Error!, args.Json, args.Verbose);
             return ExitCodes.Map(locationResult.Error!.Code);
         }
 
         var location = locationResult.Value!;
-        if (!string.IsNullOrEmpty(args.MetadataDir))
-        {
-            location = new TargetAppLocation(
-                location.App,
-                location.InstallOrConfigDir,
-                args.MetadataDir,
-                location.DownloadDirectory,
-                location.WasAutoDetected
-            );
-        }
-        if (!string.IsNullOrEmpty(args.TempDir))
-        {
-            location = new TargetAppLocation(
-                location.App,
-                args.TempDir,
-                location.MetadataDir,
-                location.DownloadDirectory,
-                location.WasAutoDetected
-            );
-        }
 
         var tasksResult = reader.ScanTasks(location);
         if (!tasksResult.IsSuccess)
@@ -155,12 +138,14 @@ public static class ExportHandler
     }
 
     private static TargetApp? ParseTargetApp(string input) =>
-        input.Trim().ToLowerInvariant() switch
-        {
-            "ndm" => TargetApp.NDM,
-            "jd2" => TargetApp.JD2,
-            _ => null,
-        };
+        string.IsNullOrWhiteSpace(input)
+            ? null
+            : input.Trim().ToLowerInvariant() switch
+            {
+                "ndm" => TargetApp.NDM,
+                "jd2" => TargetApp.JD2,
+                _ => null,
+            };
 
     private static string SanitizeFileName(string fileName)
     {

@@ -195,3 +195,66 @@ public sealed class FakeMdmaLogger : IMdmaLogger
         }
     }
 }
+
+/// <summary>In-memory fake for IConversionService — configurable for GUI ViewModel tests.</summary>
+public sealed class FakeConversionService : IConversionService
+{
+    public int ExportToFileCallCount { get; private set; }
+    public int ImportFromFileCallCount { get; private set; }
+    public int ConvertSameMachineCallCount { get; private set; }
+
+    public Result<string> ExportToFileResultToReturn { get; set; } =
+        Result<string>.Ok("fake-export.mdma");
+    public Result ImportFromFileResultToReturn { get; set; } = Result.Ok();
+    public Result ConvertSameMachineResultToReturn { get; set; } = Result.Ok();
+
+    public Result<string> ExportToFile(
+        DownloadTaskSummary task,
+        TargetAppLocation sourceLocation,
+        string userChosenDestinationPath,
+        IProgress<OperationProgress>? progress = null
+    )
+    {
+        ExportToFileCallCount++;
+        progress?.Report(new OperationProgress("Exporting", 100, "Done"));
+        return ExportToFileResultToReturn;
+    }
+
+    public Result ImportFromFile(
+        string mdmaFilePath,
+        TargetAppLocation destinationLocation,
+        IProgress<OperationProgress>? progress = null
+    )
+    {
+        ImportFromFileCallCount++;
+        progress?.Report(new OperationProgress("Importing", 100, "Done"));
+        return ImportFromFileResultToReturn;
+    }
+
+    public Result ConvertSameMachine(
+        DownloadTaskSummary task,
+        TargetAppLocation sourceLocation,
+        TargetAppLocation destinationLocation,
+        IProgress<OperationProgress>? progress = null
+    )
+    {
+        ConvertSameMachineCallCount++;
+        progress?.Report(new OperationProgress("Converting", 100, "Done"));
+        return ConvertSameMachineResultToReturn;
+    }
+}
+
+/// <summary>In-memory fake for IDownloadListReader — configurable for GUI ViewModel tests.</summary>
+public sealed class FakeDownloadListReader : IDownloadListReader
+{
+    public TargetApp App { get; set; } = TargetApp.NDM;
+    public int ScanTasksCallCount { get; private set; }
+    public Result<IReadOnlyList<DownloadTaskSummary>> ScanTasksResultToReturn { get; set; } =
+        Result<IReadOnlyList<DownloadTaskSummary>>.Ok(Array.Empty<DownloadTaskSummary>());
+
+    public Result<IReadOnlyList<DownloadTaskSummary>> ScanTasks(TargetAppLocation location)
+    {
+        ScanTasksCallCount++;
+        return ScanTasksResultToReturn;
+    }
+}

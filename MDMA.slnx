@@ -7,5 +7,6 @@
   <Folder Name="/tests/">
     <Project Path="tests/Mdma.Cli.Tests/Mdma.Cli.Tests.csproj" />
     <Project Path="tests/Mdma.Core.Tests/Mdma.Core.Tests.csproj" />
+    <Project Path="tests/Mdma.Gui.Tests/Mdma.Gui.Tests.csproj" />
   </Folder>
 </Solution>

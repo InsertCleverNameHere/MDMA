@@ -13,7 +13,7 @@ public enum MdmaLogLevel
 
 public sealed record LogEntry(
     DateTimeOffset Timestamp,
-    [property: JsonConverter(typeof(JsonStringEnumConverter))] MdmaLogLevel Level,
+    [property: JsonConverter(typeof(JsonStringEnumConverter<MdmaLogLevel>))] MdmaLogLevel Level,
     string Component,
     string Message,
     string? Details = null,

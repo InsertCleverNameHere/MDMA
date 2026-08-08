@@ -66,59 +66,39 @@ public static class ConvertHandler
 
         var registry = registryOverride ?? new RegistryAccessor();
 
-        // Resolve source location
-        IDownloadManagerLocator sourceLocator =
-            sourceApp == TargetApp.NDM ? new NdmLocator(registry) : new Jd2Locator();
+        var resolver = new LocationResolver(registry);
         IDownloadListReader sourceReader =
             sourceApp == TargetApp.NDM ? new NdmListReader() : new Jd2ListReader();
 
-        Result<TargetAppLocation> sourceLocationResult = !string.IsNullOrEmpty(args.ManualPath)
-            ? sourceLocator.ValidateManualPath(args.ManualPath)
-            : sourceLocator.TryAutoDetect();
+        // Resolve source location
+        var sourceLocationResult = resolver.ResolveLocation(
+            sourceApp.Value,
+            manualPathOverride: args.ManualPath,
+            metadataDirOverride: args.MetadataDir,
+            tempDirOverride: args.TempDir
+        );
 
         if (!sourceLocationResult.IsSuccess)
         {
-            ConsoleFormatter.PrintError(sourceLocationResult.Error!, args.Json);
+            ConsoleFormatter.PrintError(sourceLocationResult.Error!, args.Json, args.Verbose);
             return ExitCodes.Map(sourceLocationResult.Error!.Code);
         }
 
         var sourceLocation = sourceLocationResult.Value!;
-        if (!string.IsNullOrEmpty(args.MetadataDir))
-            sourceLocation = new TargetAppLocation(
-                sourceLocation.App,
-                sourceLocation.InstallOrConfigDir,
-                args.MetadataDir,
-                sourceLocation.DownloadDirectory,
-                sourceLocation.WasAutoDetected
-            );
-        if (!string.IsNullOrEmpty(args.TempDir))
-            sourceLocation = new TargetAppLocation(
-                sourceLocation.App,
-                args.TempDir,
-                sourceLocation.MetadataDir,
-                sourceLocation.DownloadDirectory,
-                sourceLocation.WasAutoDetected
-            );
 
         // Resolve destination location
-        IDownloadManagerLocator destLocator =
-            destApp == TargetApp.NDM ? new NdmLocator(registry) : new Jd2Locator();
-        Result<TargetAppLocation> destLocationResult = destLocator.TryAutoDetect();
+        var destLocationResult = resolver.ResolveLocation(
+            destApp.Value,
+            downloadDirOverride: args.DownloadDir
+        );
+
         if (!destLocationResult.IsSuccess)
         {
-            ConsoleFormatter.PrintError(destLocationResult.Error!, args.Json);
+            ConsoleFormatter.PrintError(destLocationResult.Error!, args.Json, args.Verbose);
             return ExitCodes.Map(destLocationResult.Error!.Code);
         }
 
         var destLocation = destLocationResult.Value!;
-        if (!string.IsNullOrEmpty(args.DownloadDir))
-            destLocation = new TargetAppLocation(
-                destLocation.App,
-                destLocation.InstallOrConfigDir,
-                destLocation.MetadataDir,
-                args.DownloadDir,
-                destLocation.WasAutoDetected
-            );
 
         // Scan source tasks
         var tasksResult = sourceReader.ScanTasks(sourceLocation);

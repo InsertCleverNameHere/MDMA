@@ -1,8 +1,7 @@
 using System.Diagnostics;
-using Mdma.Core;
 using Microsoft.Win32;
 
-namespace Mdma.Cli;
+namespace Mdma.Core;
 
 public sealed class RegistryAccessor : IRegistryAccessor
 {

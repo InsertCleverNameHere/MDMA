@@ -7,8 +7,7 @@ public static class ScanHandler
     public static int Execute(CliArgs args, IRegistryAccessor? registryOverride = null)
     {
         var registry = registryOverride ?? new RegistryAccessor();
-        var ndmLocator = new NdmLocator(registry);
-        var jd2Locator = new Jd2Locator();
+        var resolver = new LocationResolver(registry);
         var ndmReader = new NdmListReader();
         var jd2Reader = new Jd2ListReader();
 
@@ -17,35 +16,21 @@ public static class ScanHandler
 
         if (targetAppFilter is null or TargetApp.NDM)
         {
-            var ndmResult = ScanApp(TargetApp.NDM, ndmLocator, ndmReader, args);
-            if (!ndmResult.IsSuccess)
+            var ndmResult = ScanApp(TargetApp.NDM, resolver, ndmReader, args, allTasks);
+            if (!ndmResult.IsSuccess && targetAppFilter == TargetApp.NDM)
             {
-                if (targetAppFilter == TargetApp.NDM)
-                {
-                    ConsoleFormatter.PrintError(ndmResult.Error!, args.Json, args.Verbose);
-                    return ExitCodes.Map(ndmResult.Error!.Code);
-                }
-            }
-            else
-            {
-                allTasks.AddRange(ndmResult.Value!);
+                ConsoleFormatter.PrintError(ndmResult.Error!, args.Json, args.Verbose);
+                return ExitCodes.Map(ndmResult.Error!.Code);
             }
         }
 
         if (targetAppFilter is null or TargetApp.JD2)
         {
-            var jd2Result = ScanApp(TargetApp.JD2, jd2Locator, jd2Reader, args);
-            if (!jd2Result.IsSuccess)
+            var jd2Result = ScanApp(TargetApp.JD2, resolver, jd2Reader, args, allTasks);
+            if (!jd2Result.IsSuccess && targetAppFilter == TargetApp.JD2)
             {
-                if (targetAppFilter == TargetApp.JD2)
-                {
-                    ConsoleFormatter.PrintError(jd2Result.Error!, args.Json, args.Verbose);
-                    return ExitCodes.Map(jd2Result.Error!.Code);
-                }
-            }
-            else
-            {
-                allTasks.AddRange(jd2Result.Value!);
+                ConsoleFormatter.PrintError(jd2Result.Error!, args.Json, args.Verbose);
+                return ExitCodes.Map(jd2Result.Error!.Code);
             }
         }
 
@@ -55,49 +40,29 @@ public static class ScanHandler
 
     private static Result<IReadOnlyList<DownloadTaskSummary>> ScanApp(
         TargetApp app,
-        IDownloadManagerLocator locator,
+        ILocationResolver resolver,
         IDownloadListReader reader,
-        CliArgs args
+        CliArgs args,
+        List<DownloadTaskSummary> allTasks
     )
     {
-        Result<TargetAppLocation> locationResult;
-
-        if (!string.IsNullOrEmpty(args.ManualPath))
-        {
-            locationResult = locator.ValidateManualPath(args.ManualPath);
-        }
-        else
-        {
-            locationResult = locator.TryAutoDetect();
-        }
+        var locationResult = resolver.ResolveLocation(
+            app,
+            manualPathOverride: args.ManualPath,
+            metadataDirOverride: args.MetadataDir,
+            tempDirOverride: args.TempDir,
+            downloadDirOverride: args.DownloadDir
+        );
 
         if (!locationResult.IsSuccess)
             return locationResult.Error!;
 
-        var location = locationResult.Value!;
+        var scanResult = reader.ScanTasks(locationResult.Value!);
+        if (!scanResult.IsSuccess)
+            return scanResult.Error!;
 
-        if (app == TargetApp.NDM && !string.IsNullOrEmpty(args.MetadataDir))
-        {
-            location = new TargetAppLocation(
-                App: app,
-                InstallOrConfigDir: location.InstallOrConfigDir,
-                MetadataDir: args.MetadataDir,
-                DownloadDirectory: location.DownloadDirectory,
-                WasAutoDetected: location.WasAutoDetected
-            );
-        }
-        if (app == TargetApp.NDM && !string.IsNullOrEmpty(args.TempDir))
-        {
-            location = new TargetAppLocation(
-                App: app,
-                InstallOrConfigDir: args.TempDir,
-                MetadataDir: location.MetadataDir,
-                DownloadDirectory: location.DownloadDirectory,
-                WasAutoDetected: location.WasAutoDetected
-            );
-        }
-
-        return reader.ScanTasks(location);
+        allTasks.AddRange(scanResult.Value!);
+        return scanResult;
     }
 
     private static TargetApp? ParseTargetApp(string? input)

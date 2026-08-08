@@ -1,12 +1,120 @@
 ﻿<Window x:Class="Mdma.Gui.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:Mdma.Gui"
-        mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
-    <Grid>
+        xmlns:gui="clr-namespace:Mdma.Gui"
+        xmlns:vm="clr-namespace:Mdma.Gui.ViewModels"
+        xmlns:views="clr-namespace:Mdma.Gui.Views"
+        Title="MDMA — Multi Download Manager Analogue" 
+        Height="650" Width="1000"
+        WindowStartupLocation="CenterScreen">
+    
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
+        <DataTemplate DataType="{x:Type vm:ScanViewModel}">
+            <views:ScanView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:ExportViewModel}">
+            <views:ExportView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:ImportViewModel}">
+            <views:ImportView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:ConvertViewModel}">
+            <views:ConvertView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:BackupsViewModel}">
+            <views:BackupsView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:SettingsViewModel}">
+            <views:SettingsView />
+        </DataTemplate>
+    </Window.Resources>
+
+    <Grid Background="#F8F9FA">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/> <!-- Warning Banner -->
+            <RowDefinition Height="*"/>    <!-- Main Body (Nav + Content) -->
+            <RowDefinition Height="28"/>   <!-- Status Bar -->
+        </Grid.RowDefinitions>
+
+        <!-- Top Warning Banner (AppData Fallback) -->
+        <Border Grid.Row="0" Background="#FFF3CD" BorderBrush="#FFEEBA" BorderThickness="0,0,0,1" Padding="12,8"
+                Visibility="{Binding IsFallbackWorkingRoot, Converter={StaticResource BoolToVis}}">
+            <DockPanel>
+                <Button Content="Dismiss" Command="{Binding DismissWarningCommand}" DockPanel.Dock="Right"
+                        Padding="12,4" Margin="10,0,0,0" Background="#856404" Foreground="White" BorderThickness="0"/>
+                <TextBlock VerticalAlignment="Center" Foreground="#856404" FontWeight="SemiBold">
+                    ⚠️ Working directory could not use portable folder next to exe and is using AppData fallback location.
+                </TextBlock>
+            </DockPanel>
+        </Border>
+
+        <!-- Main Body: Navigation + Active Screen Content -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="200"/> <!-- Left Nav -->
+                <ColumnDefinition Width="*"/>   <!-- Content Area -->
+            </Grid.ColumnDefinitions>
+
+            <!-- Left Navigation Sidebar -->
+            <Border Grid.Column="0" Background="#2B2D42" Padding="0,15,0,0">
+                <StackPanel>
+                    <TextBlock Text="MDMA" Foreground="White" FontSize="22" FontWeight="Bold" Margin="20,0,0,20"/>
+                    
+                    <Button Content="Scan / Tasks" Command="{Binding NavigateCommand}" CommandParameter="{x:Static gui:ViewScreen.Scan}"
+                            Margin="10,4" Padding="15,10" HorizontalContentAlignment="Left" Background="Transparent" Foreground="White" BorderThickness="0" FontSize="14"/>
+                    
+                    <Button Content="Import Package" Command="{Binding NavigateCommand}" CommandParameter="{x:Static gui:ViewScreen.Import}"
+                            Margin="10,4" Padding="15,10" HorizontalContentAlignment="Left" Background="Transparent" Foreground="White" BorderThickness="0" FontSize="14"/>
+
+                    <Button Content="Convert" Command="{Binding NavigateCommand}" CommandParameter="{x:Static gui:ViewScreen.Convert}"
+                            Margin="10,4" Padding="15,10" HorizontalContentAlignment="Left" Background="Transparent" Foreground="White" BorderThickness="0" FontSize="14"/>
+                    
+                    <Button Content="Backups" Command="{Binding NavigateCommand}" CommandParameter="{x:Static gui:ViewScreen.Backups}"
+                            Margin="10,4" Padding="15,10" HorizontalContentAlignment="Left" Background="Transparent" Foreground="White" BorderThickness="0" FontSize="14"/>
+                    
+                    <Button Content="Settings" Command="{Binding NavigateCommand}" CommandParameter="{x:Static gui:ViewScreen.Settings}"
+                            Margin="10,4" Padding="15,10" HorizontalContentAlignment="Left" Background="Transparent" Foreground="White" BorderThickness="0" FontSize="14"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Main Content Display -->
+            <ContentControl Grid.Column="1" Content="{Binding NavigationService.CurrentViewModel}" Margin="20"/>
+        </Grid>
+
+        <!-- Bottom Status Bar -->
+        <Border Grid.Row="2" Background="#E9ECEF" BorderBrush="#DEE2E6" BorderThickness="0,1,0,0" Padding="15,4">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Right" Text="v1.0.0" Foreground="#6C757D" FontSize="11"/>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Working Directory: " FontWeight="SemiBold" Foreground="#495057" FontSize="11"/>
+                    <TextBlock Text="{Binding WorkingRootPath}" Foreground="#495057" FontSize="11"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Global Busy Overlay (Locks interaction during long operations) -->
+        <Grid Grid.Row="0" Grid.RowSpan="3" Background="#80000000"
+              Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}">
+            <Border Background="White" CornerRadius="8" Padding="30,20" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel HorizontalAlignment="Center">
+                    <ProgressBar IsIndeterminate="True" Width="200" Height="6" Margin="0,0,0,15"/>
+                    <TextBlock Text="Operation in progress, please wait..." FontWeight="SemiBold" Foreground="#212529" HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- Blocking Error Overlay (Unwritable working root hard failure) -->
+        <Grid Grid.Row="0" Grid.RowSpan="3" Background="#CC000000"
+              Visibility="{Binding HasBlockingError, Converter={StaticResource BoolToVis}}">
+            <Border Background="White" CornerRadius="8" Padding="30,25" Width="450" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel>
+                    <TextBlock Text="❌ Startup Error" FontSize="18" FontWeight="Bold" Foreground="#D9534F" Margin="0,0,0,10"/>
+                    <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" Foreground="#212529" Margin="0,0,0,10"/>
+                    <TextBlock Text="{Binding SuggestedAction}" TextWrapping="Wrap" Foreground="#6C757D" FontSize="12" Margin="0,0,0,15"/>
+                </StackPanel>
+            </Border>
+        </Grid>
     </Grid>
 </Window>

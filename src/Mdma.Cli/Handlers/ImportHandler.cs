@@ -64,50 +64,23 @@ public static class ImportHandler
         var workingRoot = workDirResult.Value!;
 
         var registry = registryOverride ?? new RegistryAccessor();
-        IDownloadManagerLocator locator =
-            targetApp == TargetApp.NDM ? new NdmLocator(registry) : new Jd2Locator();
+        var resolver = new LocationResolver(registry);
 
-        Result<TargetAppLocation> locationResult = !string.IsNullOrEmpty(args.ManualPath)
-            ? locator.ValidateManualPath(args.ManualPath)
-            : locator.TryAutoDetect();
+        var locationResult = resolver.ResolveLocation(
+            targetApp.Value,
+            manualPathOverride: args.ManualPath,
+            metadataDirOverride: args.MetadataDir,
+            tempDirOverride: args.TempDir,
+            downloadDirOverride: args.DownloadDir
+        );
 
         if (!locationResult.IsSuccess)
         {
-            ConsoleFormatter.PrintError(locationResult.Error!, args.Json);
+            ConsoleFormatter.PrintError(locationResult.Error!, args.Json, args.Verbose);
             return ExitCodes.Map(locationResult.Error!.Code);
         }
 
         var location = locationResult.Value!;
-        if (!string.IsNullOrEmpty(args.MetadataDir))
-        {
-            location = new TargetAppLocation(
-                location.App,
-                location.InstallOrConfigDir,
-                args.MetadataDir,
-                location.DownloadDirectory,
-                location.WasAutoDetected
-            );
-        }
-        if (!string.IsNullOrEmpty(args.TempDir))
-        {
-            location = new TargetAppLocation(
-                location.App,
-                args.TempDir,
-                location.MetadataDir,
-                location.DownloadDirectory,
-                location.WasAutoDetected
-            );
-        }
-        if (!string.IsNullOrEmpty(args.DownloadDir))
-        {
-            location = new TargetAppLocation(
-                location.App,
-                location.InstallOrConfigDir,
-                location.MetadataDir,
-                args.DownloadDir,
-                location.WasAutoDetected
-            );
-        }
 
         var processGuard = new ProcessGuard(new ProcessLister());
         var spaceChecker = new SpaceChecker(new DiskSpaceSource());
