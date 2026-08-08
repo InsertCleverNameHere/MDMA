@@ -123,11 +123,15 @@ public static class ImportHandler
         return ExitCodes.Success;
     }
 
-    private static TargetApp? ParseTargetApp(string input) =>
-        input.Trim().ToLowerInvariant() switch
+    private static TargetApp? ParseTargetApp(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return null;
+        return input.Trim().ToLowerInvariant() switch
         {
             "ndm" => TargetApp.NDM,
             "jd2" => TargetApp.JD2,
             _ => null,
         };
+    }
 }

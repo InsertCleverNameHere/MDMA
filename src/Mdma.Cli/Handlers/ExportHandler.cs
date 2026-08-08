@@ -137,15 +137,17 @@ public static class ExportHandler
         return ExitCodes.Success;
     }
 
-    private static TargetApp? ParseTargetApp(string input) =>
-        string.IsNullOrWhiteSpace(input)
-            ? null
-            : input.Trim().ToLowerInvariant() switch
-            {
-                "ndm" => TargetApp.NDM,
-                "jd2" => TargetApp.JD2,
-                _ => null,
-            };
+    private static TargetApp? ParseTargetApp(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return null;
+        return input.Trim().ToLowerInvariant() switch
+        {
+            "ndm" => TargetApp.NDM,
+            "jd2" => TargetApp.JD2,
+            _ => null,
+        };
+    }
 
     private static string SanitizeFileName(string fileName)
     {
